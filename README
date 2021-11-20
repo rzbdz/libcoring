@@ -1,0 +1,3 @@
+libcoring is a C++ network library in Proactor pattern (@see: POSA2),
+and it is based on the new io_uring syscall of linux and coroutine in C++ 20.
+It's under development now, nothing is completed so far.
