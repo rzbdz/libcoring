@@ -1,0 +1,11 @@
+.vscode/
+.idea/
+cmake-build-wsl-debug/
+cmake-build-wsl-default/
+cmake-build/
+build/
+Makefile
+etc/
+test/
+trivial/
+*.out
