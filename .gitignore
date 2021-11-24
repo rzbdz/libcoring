@@ -9,3 +9,5 @@ etc/
 test/
 trivial/
 *.out
+public/
+recipes/
