@@ -11,3 +11,5 @@ trivial/
 *.out
 public/
 recipes/
+*.gch
+*.h.gch
