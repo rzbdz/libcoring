@@ -3,7 +3,6 @@ set(UTILS_SRCS
         logging/logger.cpp
         logging/log_file.cpp
         logging/logging.cpp
-        buffer.cpp
         codec.cpp
         thread_pool.cpp)
 
