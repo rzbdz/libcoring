@@ -2,17 +2,17 @@
 #ifndef CORING_DEBUG_HPP
 #define CORING_DEBUG_HPP
 
-#define assert_eq(expr1, expr2)                                                                                                                                                                   \
-  if (!((expr1) == (expr2))) {                                                                                                                                                                    \
+#define assert_eq(expr1, expr2)                                                                                                                                                                  \
+  if (!((expr1) == (expr2))) {                                                                                                                                                                   \
     fprintf(stderr, "[%s %d] [%s]: Eq Assertion failed: " #expr1 ": %lu(0x%lx); " #expr2 ": %lu(0x%lx) \n", __FILE__, __LINE__, __FUNCTION__, (size_t)(expr1), (size_t)(expr1), (size_t)(expr2), \
-            (size_t)(expr2));                                                                                                                                                                     \
-    abort();                                                                                                                                                                                      \
-  }
-#define expect_eq(expr1, expr2)                                                                                                                                                                     \
-  if (!((expr1) == (expr2))) {                                                                                                                                                                      \
+            (size_t)(expr2));                                                                                                                                                                    \
+    abort();                                                                                                                                                                                     \
+  } else
+#define expect_eq(expr1, expr2)                                                                                                                                                                    \
+  if (!((expr1) == (expr2))) {                                                                                                                                                                     \
     fprintf(stderr, "[%s %d] [%s]: Eq Expectation failed: " #expr1 ": %lu(0x%lx); " #expr2 ": %lu(0x%lx) \n", __FILE__, __LINE__, __FUNCTION__, (size_t)(expr1), (size_t)(expr1), (size_t)(expr2), \
-            (size_t)(expr2));                                                                                                                                                                       \
-  }
+            (size_t)(expr2));                                                                                                                                                                      \
+  } else
 // don't use stdio and printf/scanf for there are malloc calls in them.
 // use stderr who has no buffer
 #ifndef NDEBUG
