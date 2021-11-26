@@ -1,4 +1,3 @@
-
 #ifndef CORING_ENDIAN_HPP
 #define CORING_ENDIAN_HPP
 #include <cstdint>
@@ -48,5 +47,4 @@ inline int16_t network_to_host(int16_t net16) { return be16toh(net16); }
 inline int8_t network_to_host(int8_t net8) { return net8; }
 
 }  // namespace coring
-
 #endif  // CORING_ENDIAN_HPP
