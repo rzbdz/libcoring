@@ -33,7 +33,7 @@ class task_promise_base {
   };
 
  public:
-  task_promise_base() noexcept = default;
+  task_promise_base() noexcept {};
 
   auto initial_suspend() noexcept { return std::suspend_always{}; }
 
@@ -48,7 +48,7 @@ class task_promise_base {
 template <typename T>
 class task_promise final : public task_promise_base {
  public:
-  task_promise() noexcept = default;
+  task_promise() noexcept {};
 
   ~task_promise() {
     switch (m_resultType) {
@@ -173,6 +173,11 @@ class [[nodiscard]] task {
   };
 
  public:
+  template <typename Scheduler_>
+  std::coroutine_handle<> bind_scheduler(Scheduler_ s) {
+    s.register_task_handle(this->my_continuation_);
+  }
+
   task() noexcept : my_continuation_(nullptr) {}
 
   explicit task(std::coroutine_handle<promise_type> coro) : my_continuation_(coro) {}
@@ -257,7 +262,15 @@ class [[nodiscard]] task {
  private:
   std::coroutine_handle<promise_type> my_continuation_;
 };
-
+struct async_run {
+  struct promise_type {
+    async_run get_return_object() { return {}; }
+    std::suspend_never initial_suspend() { return {}; }
+    std::suspend_never final_suspend() noexcept { return {}; }
+    void unhandled_exception() {}
+    void return_void() {}
+  };
+};
 namespace detail {
 template <typename T>
 task<T> task_promise<T>::get_return_object() noexcept {
