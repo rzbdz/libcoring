@@ -20,7 +20,6 @@
 #include "../../async/uio_async.hpp"
 
 namespace coring::detail {
-
 class uio {
   // This class is adopted from project liburing4cpp.
   //
@@ -71,7 +70,7 @@ class uio {
  public:
   // TODO(pan): there are a lot things to be resolved and done.
   //  a great design problem.... tough for me though
-  void wait_for_a_completion_sync() {
+  void wait_for_completions() {
     io_uring_submit_and_wait(&ring, 1);
     io_uring_cqe *cqe;
     unsigned head;
