@@ -180,7 +180,7 @@ class dynamic_format_arg_store
       fmt::dynamic_format_arg_store<fmt::format_context> store;
       char band[] = "Rolling Stones";
       store.push_back(std::cref(band));
-      band[9] = 'c'; // Changing str affects the submit_async.
+      band[9] = 'c'; // Changing str affects the output.
       std::string result = fmt::vformat("{}", store);
       // result == "Rolling Scones"
     \endrst
