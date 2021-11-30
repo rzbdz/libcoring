@@ -1,4 +1,3 @@
-
 ///
 /// only for logging module
 /// while
@@ -22,7 +21,6 @@ class timestamp {
       : sys_timestamp_{std::chrono::system_clock::now()},
         ymd_data_{std::chrono::floor<std::chrono::days>(sys_timestamp_)},
         hms_data_{std::chrono::duration_cast<std::chrono::microseconds>(sys_timestamp_.time_since_epoch() - std::chrono::duration_cast<std::chrono::days>(sys_timestamp_.time_since_epoch()))} {}
-
   int year() { return static_cast<int>(ymd_data_.year()); }
   unsigned month() { return static_cast<unsigned>(ymd_data_.month()); }
   unsigned day() { return static_cast<unsigned>(ymd_data_.day()); }
@@ -70,7 +68,18 @@ class timestamp {
     return buf;
   }
 
+  explicit operator std::string() { return to_formatted_string(); }
+  friend auto operator-(const timestamp &lhs, const timestamp &rhs) {
+    //
+    return std::chrono::duration_cast<std::chrono::microseconds>(lhs.sys_timestamp_.time_since_epoch() - rhs.sys_timestamp_.time_since_epoch());
+  }
+
  private:
+  timestamp(const std::chrono::time_point<std::chrono::system_clock>)
+      : sys_timestamp_{std::chrono::system_clock::now()},
+        ymd_data_{std::chrono::floor<std::chrono::days>(sys_timestamp_)},
+        hms_data_{std::chrono::duration_cast<std::chrono::microseconds>(sys_timestamp_.time_since_epoch() - std::chrono::duration_cast<std::chrono::days>(sys_timestamp_.time_since_epoch()))} {}
+
   const std::chrono::time_point<std::chrono::system_clock> sys_timestamp_;
   const std::chrono::year_month_day ymd_data_;
   const std::chrono::hh_mm_ss<std::chrono::microseconds> hms_data_;
