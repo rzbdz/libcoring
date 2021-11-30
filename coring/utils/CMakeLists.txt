@@ -2,7 +2,6 @@
 set(UTILS_SRCS
         logging/async_logger.cpp
         logging/log_file.cpp
-        logging/logging.cpp
         codec.cpp
         thread_pool.cpp)
 
