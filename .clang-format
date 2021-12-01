@@ -1,7 +1,7 @@
 BasedOnStyle: Google
 DerivePointerAlignment: false
 PointerAlignment: Right
-ColumnLimit: 200
+ColumnLimit: 120
 Standard: c++20
 # Default for clang-8, changed in later clangs. Set explicitly for forwards
 # compatibility for modern clangs
