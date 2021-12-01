@@ -10,7 +10,8 @@
 ///   - http://code.dpdk.org/dpdk/v19.11/source/lib/librte_ring/rte_ring.c
 ///   - https://elixir.bootlin.com/linux/latest/source/include/linux/kfifo.h
 /// use alignas to prevent performance strike caused by cache line false sharing
-///   - https://www.intel.com/content/www/us/en/develop/documentation/vtune-cookbook/top/tuning-recipes/false-sharing.html
+///   -
+///   https://www.intel.com/content/www/us/en/develop/documentation/vtune-cookbook/top/tuning-recipes/false-sharing.html
 ///   - false sharing solution learned from github.com/rigtorp/SPSCQueue and github.com/MengRao/SPSC_Queue
 
 #ifndef CORING_SPSC_RING_HPP
@@ -19,6 +20,11 @@
 #include <vector>
 #include <cassert>
 #include <atomic>
+#include <bits/shared_ptr.h>
+
+#define RAW_LOG
+// #define RAW_NDEBUG
+
 #include "../debug.hpp"
 #include "../noncopyable.hpp"
 namespace coring {
@@ -26,24 +32,29 @@ template <typename T>
 class spsc_ring : noncopyable {
  public:
   // capacity must be the power of 2
-  explicit spsc_ring(const size_t capacity) : capacity_(capacity) {
+  explicit spsc_ring(const size_t capacity) noexcept : capacity_(capacity) {
     assert((capacity & 1) != 1);
     // memory layout: [padding] [data] [padding]
     if (capacity_ > SIZE_MAX - 2 * k_padding) {
       capacity_ = SIZE_MAX - 2 * k_padding;
     }
     mask_ = capacity_ - 1;
-    data_ = new T[capacity_ + 2 * k_padding];
+    // FIXME: here bad_alloc may arise, just let it crash.
+    // data_ = new T[capacity_ + 2 * k_padding];
+    data_ = ::malloc((sizeof(T)) * capacity_ + 2 * k_padding);
+
     static_assert(alignof(spsc_ring<T>) == k_cache_line_size, "not aligned");
     static_assert(sizeof(spsc_ring<T>) >= 3 * k_cache_line_size);
-    assert(reinterpret_cast<char *>(&index_read_) - reinterpret_cast<char *>(&index_write_) >= static_cast<std::ptrdiff_t>(k_cache_line_size));
+    assert(reinterpret_cast<char *>(&index_read_) - reinterpret_cast<char *>(&index_write_) >=
+           static_cast<std::ptrdiff_t>(k_cache_line_size));
   }
 
   ~spsc_ring() {
     while (front()) {
       pop();
     }
-    delete[] data_;
+    // delete[] data_;
+    free(data_);
   }
 
   template <typename... Args>
@@ -59,7 +70,7 @@ class spsc_ring : noncopyable {
     // prepare to swap local view and global
     auto write_index_next = write_index + 1;
     // unsigned wrap around
-    new (&data_[(write_index & mask_) + k_padding]) T(std::forward<Args>(args)...);
+    new (static_cast<T *>(data_) + (write_index & mask_) + k_padding) T(std::forward<Args>(args)...);
     std::atomic_thread_fence(std::memory_order_release);
     index_write_ = write_index_next;
   }
@@ -77,8 +88,8 @@ class spsc_ring : noncopyable {
     // prepare to swap local view and global
     auto write_index_next = write_index + 1;
     // unsigned wrap around
-    LOG_DEBUG("writei: %lu, writeinext: %lu", write_index, write_index_next);
-    new (&data_[(write_index & mask_) + k_padding]) T(std::forward<Args>(args)...);
+    LOG_DEBUG_RAW("writei: %lu, writeinext: %lu", write_index, write_index_next);
+    new (static_cast<T *>(data_) + (write_index & mask_) + k_padding) T(std::forward<Args>(args)...);
     // make sure new product in place before being viewed.
     std::atomic_thread_fence(std::memory_order_release);
     index_write_ = write_index_next;
@@ -111,9 +122,11 @@ class spsc_ring : noncopyable {
     auto write_index = index_write_;
     auto entries = write_index - read_index;
     if (__glibc_unlikely(entries == 0)) {
+      LOG_DEBUG_RAW("in spsc front is nullptr, w %lu, r %lu", write_index, read_index);
       return nullptr;
     }
-    return &data_[k_padding + (read_index & mask_)];
+    LOG_DEBUG_RAW("in spsc front ready to return:  (read_index & mask_): %lu", (read_index & mask_));
+    return &((static_cast<T *>(data_))[k_padding + (read_index & mask_)]);
   }
 
   void pop() noexcept {
@@ -126,23 +139,33 @@ class spsc_ring : noncopyable {
     index_read_ = read_next;
     // make sure nobody can read it
     std::atomic_thread_fence(std::memory_order_release);
-    data_[k_padding + (read_index & mask_)].~T();
+    (static_cast<T *>(data_)[k_padding + (read_index & mask_)]).~T();
   }
 
   size_t size() const noexcept {
     // a not really useful member
     auto read_index = index_read_;
     auto write_index = index_write_;
+    // entries
+    LOG_DEBUG_RAW("spsc size return: %lu, w %lu,r %lu", write_index - read_index, write_index, read_index);
     return write_index - read_index;
   }
 
   bool empty() const noexcept { return size() == 0; }
-
+  bool full() const noexcept {
+    auto const write_index = index_write_;
+    auto const read_index = index_read_;
+    auto free_entries = (mask_ + read_index - write_index);
+    if (free_entries == 0) {
+      return false;
+    }
+    return true;
+  }
   size_t capacity() const noexcept {
     // don't forget we have to make one room wasted for the full queue case
     return mask_;
   }
-  T *data() { return data_ + k_padding; }
+  T *data() { return static_cast<T *>(data_) + k_padding; }
 
  private:
 #ifdef __cpp_lib_hardware_interference_size
@@ -157,7 +180,7 @@ class spsc_ring : noncopyable {
  private:
   size_t capacity_;
   size_t mask_;
-  T *data_;
+  void *data_;
   // Align to cache line size in order to avoid false sharing
   // L1 cache: different core has separate cache line, if i_write and i_read
   // in the same line, when producer update read, it would make index_write
@@ -169,8 +192,9 @@ class spsc_ring : noncopyable {
   alignas(k_cache_line_size) size_t index_read_{0};
 
   // Padding to avoid adjacent allocations to share cache line
-  char padding_[k_cache_line_size - sizeof(index_read_)];
+  char padding_[k_cache_line_size - sizeof(index_read_)]{};
 };
+
 }  // namespace coring
 
 #endif  // CORING_SPSC_RING_HPP
