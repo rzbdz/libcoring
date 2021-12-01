@@ -228,7 +228,7 @@ void test_timestamp() {
   std::cout << copy.to_formatted_string() << std::endl;
   coring::timestamp ts2;
   std::cout << ts2.to_formatted_string() << std::endl;
-  std::cout << ts1.compare_second(ts2) << std::endl;
+  std::cout << ts1.same_second(ts2) << std::endl;
 }
 struct TEST {
   static void test_logger() {

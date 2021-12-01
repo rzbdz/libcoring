@@ -21,7 +21,7 @@
 
 namespace coring::detail {
 class uio {
-  // This class is adopted from project liburing4cpp.
+  // This class is adopted from project liburing4cpp (MIT license).
   //
   // Since io_uring is still under development
   // iteratively, early version of related library should
@@ -68,7 +68,7 @@ class uio {
   uio &operator=(const uio &) = delete;
 
  public:
-  // TODO(pan): there are a lot things to be resolved and done.
+  // TODO: there are a lot things to be resolved and done.
   //  a great design problem.... tough for me though
   void wait_for_completions() {
     io_uring_submit_and_wait(&ring, 1);
@@ -138,7 +138,8 @@ class uio {
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  uio_awaitable read_fixed(int fd, void *buf, unsigned nbytes, off_t offset, int buf_index, uint8_t iflags = 0) noexcept {
+  uio_awaitable read_fixed(int fd, void *buf, unsigned nbytes, off_t offset, int buf_index,
+                           uint8_t iflags = 0) noexcept {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_read_fixed(sqe, fd, buf, nbytes, offset, buf_index);
     return make_awaitable(sqe, iflags);
@@ -151,7 +152,8 @@ class uio {
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  uio_awaitable write_fixed(int fd, const void *buf, unsigned nbytes, off_t offset, int buf_index, uint8_t iflags = 0) noexcept {
+  uio_awaitable write_fixed(int fd, const void *buf, unsigned nbytes, off_t offset, int buf_index,
+                            uint8_t iflags = 0) noexcept {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_write_fixed(sqe, fd, buf, nbytes, offset, buf_index);
     return make_awaitable(sqe, iflags);
@@ -175,7 +177,8 @@ class uio {
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  uio_awaitable sync_file_range(int fd, off64_t offset, off64_t nbytes, unsigned sync_range_flags, uint8_t iflags = 0) noexcept {
+  uio_awaitable sync_file_range(int fd, off64_t offset, off64_t nbytes, unsigned sync_range_flags,
+                                uint8_t iflags = 0) noexcept {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_rw(IORING_OP_SYNC_FILE_RANGE, sqe, fd, nullptr, nbytes, offset);
     sqe->sync_range_flags = sync_range_flags;
@@ -324,7 +327,8 @@ class uio {
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  uio_awaitable statx(int dfd, const char *path, int flags, unsigned mask, struct statx *statxbuf, uint8_t iflags = 0) noexcept {
+  uio_awaitable statx(int dfd, const char *path, int flags, unsigned mask, struct statx *statxbuf,
+                      uint8_t iflags = 0) noexcept {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_statx(sqe, dfd, path, flags, mask, statxbuf);
     return make_awaitable(sqe, iflags);
@@ -336,7 +340,8 @@ class uio {
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  uio_awaitable splice(int fd_in, loff_t off_in, int fd_out, loff_t off_out, size_t nbytes, unsigned flags, uint8_t iflags = 0) {
+  uio_awaitable splice(int fd_in, loff_t off_in, int fd_out, loff_t off_out, size_t nbytes, unsigned flags,
+                       uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_splice(sqe, fd_in, off_in, fd_out, off_out, nbytes, flags);
     return make_awaitable(sqe, iflags);
@@ -372,7 +377,8 @@ class uio {
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  uio_awaitable renameat(int olddfd, const char *oldpath, int newdfd, const char *newpath, unsigned flags, uint8_t iflags = 0) {
+  uio_awaitable renameat(int olddfd, const char *oldpath, int newdfd, const char *newpath, unsigned flags,
+                         uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_renameat(sqe, olddfd, oldpath, newdfd, newpath, flags);
     return make_awaitable(sqe, iflags);
@@ -408,7 +414,8 @@ class uio {
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  uio_awaitable linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags, uint8_t iflags = 0) {
+  uio_awaitable linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags,
+                       uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_linkat(sqe, olddirfd, oldpath, newdirfd, newpath, flags);
     return make_awaitable(sqe, iflags);
@@ -457,12 +464,16 @@ class uio {
    * @see io_uring_register(2) IORING_REGISTER_FILES
    */
   void register_files(std::initializer_list<int> fds) { register_files(fds.begin(), (unsigned int)fds.size()); }
-  void register_files(const int *files, unsigned int nr_files) { io_uring_register_files(&ring, files, nr_files) | panic_on_err("io_uring_register_files", false); }
+  void register_files(const int *files, unsigned int nr_files) {
+    io_uring_register_files(&ring, files, nr_files) | panic_on_err("io_uring_register_files", false);
+  }
 
   /** Update registered files
    * @see io_uring_register(2) IORING_REGISTER_FILES_UPDATE
    */
-  void register_files_update(unsigned off, int *files, unsigned nr_files) { io_uring_register_files_update(&ring, off, files, nr_files) | panic_on_err("io_uring_register_files", false); }
+  void register_files_update(unsigned off, int *files, unsigned nr_files) {
+    io_uring_register_files_update(&ring, off, files, nr_files) | panic_on_err("io_uring_register_files", false);
+  }
 
   /** Unregister all files
    * @see io_uring_register(2) IORING_UNREGISTER_FILES
@@ -478,7 +489,9 @@ class uio {
   void register_buffers(iovec(&&ioves)[N]) {
     register_buffers(&ioves[0], N);
   }
-  void register_buffers(const struct iovec *iovecs, unsigned nr_iovecs) { io_uring_register_buffers(&ring, iovecs, nr_iovecs) | panic_on_err("io_uring_register_buffers", false); }
+  void register_buffers(const struct iovec *iovecs, unsigned nr_iovecs) {
+    io_uring_register_buffers(&ring, iovecs, nr_iovecs) | panic_on_err("io_uring_register_buffers", false);
+  }
 
   /** Unregister all buffers
    * @see io_uring_register(2) IORING_UNREGISTER_BUFFERS

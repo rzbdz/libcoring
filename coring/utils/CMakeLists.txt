@@ -1,7 +1,6 @@
 # inherited from coring
 set(UTILS_SRCS
         logging/async_logger.cpp
-        logging/log_file.cpp
         codec.cpp
         thread_pool.cpp)
 

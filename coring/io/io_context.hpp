@@ -14,7 +14,7 @@ class io_context {
   }
 
  private:
-  // TODO(pan): as far as I know, std::function
+  // TODO: as far as I know, std::function
   // can be used to implement true generic container for
   // template class.
   // When make everything inherit from a IClass is painful.

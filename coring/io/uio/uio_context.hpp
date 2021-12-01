@@ -39,7 +39,7 @@ class uio_context : noncopyable {
   uio_context() {
     internal_event_fd_ = ::eventfd(0, 0);
     if (internal_event_fd_ == -1) {
-      // TODO(pan): error handling
+      // TODO: error handling
       // sadly it's another big story to tell.
       // either use the exception or simply print some logs and abort.
       // https://isocpp.org/wiki/faq/exceptions#ctors-can-throw
@@ -52,7 +52,7 @@ class uio_context : noncopyable {
     // have to free resources
     ::close(internal_event_fd_);
   }
-  /// TODO(pan): not completed
+  /// TODO: not completed
   /// the best practice might be using a eventfd in io_uring
   /// or manage your timing event using a rb-tree timing wheel etc. to
   /// use IORING_OP_TIMEOUT like timerfd in epoll?
@@ -68,7 +68,7 @@ class uio_context : noncopyable {
     stopped_ = true;
   }
   /// FIXME: many problems here
-  /// TODO(pan): it 's not a good interface
+  /// TODO: it 's not a good interface
   /// but how to expose the completion queue
   /// to user without data copying ?
   /// \tparam T
@@ -99,7 +99,7 @@ class uio_context : noncopyable {
   // a event fd for many uses
   int internal_event_fd_;
   // it's ok to store handle for it's merely a pointer
-  // TODO(pan): locking blocking queue
+  // TODO: locking blocking queue
   // an alternative is to use MPSC lockfree queue(ring buffer).
   // a more simple implementation is to use thread_local SPSC lockfree
   // queue and provide a registering interface exposed to other threads.
