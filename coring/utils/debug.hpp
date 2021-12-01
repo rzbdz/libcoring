@@ -1,27 +1,36 @@
-
+/// RAW LOG
+/// since async logger cannot boostrap itself.
 #ifndef CORING_DEBUG_HPP
 #define CORING_DEBUG_HPP
-
-#define assert_eq(expr1, expr2)                                                                                                                                                                  \
-  if (!((expr1) == (expr2))) {                                                                                                                                                                   \
-    fprintf(stderr, "[%s %d] [%s]: Eq Assertion failed: " #expr1 ": %lu(0x%lx); " #expr2 ": %lu(0x%lx) \n", __FILE__, __LINE__, __FUNCTION__, (size_t)(expr1), (size_t)(expr1), (size_t)(expr2), \
-            (size_t)(expr2));                                                                                                                                                                    \
-    abort();                                                                                                                                                                                     \
+#include <stdio.h>
+#define assert_eq(expr1, expr2)                                                                                       \
+  if (!((expr1) == (expr2))) {                                                                                        \
+    fprintf(stderr, "[%s %d] [%s]: Eq Assertion failed: " #expr1 ": %lu(0x%lx); " #expr2 ": %lu(0x%lx) \n", __FILE__, \
+            __LINE__, __FUNCTION__, (size_t)(expr1), (size_t)(expr1), (size_t)(expr2), (size_t)(expr2));              \
+    abort();                                                                                                          \
   } else
-#define expect_eq(expr1, expr2)                                                                                                                                                                    \
-  if (!((expr1) == (expr2))) {                                                                                                                                                                     \
-    fprintf(stderr, "[%s %d] [%s]: Eq Expectation failed: " #expr1 ": %lu(0x%lx); " #expr2 ": %lu(0x%lx) \n", __FILE__, __LINE__, __FUNCTION__, (size_t)(expr1), (size_t)(expr1), (size_t)(expr2), \
-            (size_t)(expr2));                                                                                                                                                                      \
+#define expect_eq(expr1, expr2)                                                                                    \
+  if (!((expr1) == (expr2))) {                                                                                     \
+    fprintf(stderr, "[%s %d] [%s]: Eq Expectation failed: " #expr1 ": %lu(0x%lx); " #expr2 ": %lu(0x%lx) \n",      \
+            __FILE__, __LINE__, __FUNCTION__, (size_t)(expr1), (size_t)(expr1), (size_t)(expr2), (size_t)(expr2)); \
   } else
 // don't use stdio and printf/scanf for there are malloc calls in them.
 // use stderr who has no buffer
-#ifndef NDEBUG
-#define LOG_DEBUG(fmt, args...) fprintf(stderr, "[%s %d\t::%s()] " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##args)
-#define P_P(x) LOG_DEBUG(#x " %lx", (size_t)(x));
-#define P_D(x) LOG_DEBUG(#x " %lu", (size_t)(x));
+#ifndef LOG_DEBUG_RAW
+
+#ifndef RAW_NDEBUG
+#define LOG_DEBUG_RAW(fmt, args...) \
+  fprintf(stderr, "[%s %d\t::%s()] " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##args)
+
 #else
-#define LOG_DEBUG(fmt, args...) static_cast<void>(0)
+#define LOG_DEBUG_RAW(fmt, args...) static_cast<void>(0)
 #endif
-#define LOG_INFO(fmt, args...) fprintf(stderr, "[%s %d\t::%s()] " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##args)
+
+#endif
+
+#ifndef LOG_INFO_RAW
+#define LOG_INFO_RAW(fmt, args...) \
+  fprintf(stderr, "[%s %d\t::%s()] " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##args)
+#endif
 
 #endif  // CORING_DEBUG_HPP
