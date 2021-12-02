@@ -20,6 +20,7 @@
 #include <vector>
 #include <cassert>
 #include <atomic>
+#include <cstdlib>
 #include <bits/shared_ptr.h>
 
 #define RAW_LOG
@@ -41,11 +42,11 @@ class spsc_ring : noncopyable {
     mask_ = capacity_ - 1;
     // FIXME: here bad_alloc may arise, just let it crash.
     // data_ = new T[capacity_ + 2 * k_padding];
-    data_ = ::malloc((sizeof(T)) * capacity_ + 2 * k_padding);
+    data_ = ::malloc((sizeof(T)) * (capacity_ + 2 * k_padding));
 
     static_assert(alignof(spsc_ring<T>) == k_cache_line_size, "not aligned");
     static_assert(sizeof(spsc_ring<T>) >= 3 * k_cache_line_size);
-    assert(reinterpret_cast<char *>(&index_read_) - reinterpret_cast<char *>(&index_write_) >=
+    assert(reinterpret_cast<volatile char *>(&index_read_) - reinterpret_cast<volatile char *>(&index_write_) >=
            static_cast<std::ptrdiff_t>(k_cache_line_size));
   }
 
@@ -60,13 +61,16 @@ class spsc_ring : noncopyable {
   template <typename... Args>
   void emplace(Args &&...args) {
     static_assert(std::is_constructible<T, Args &&...>::value, "T must be constructible with Args&&...");
-    size_t write_index, read_index, free_entries = 0;
+    unsigned long write_index, read_index, free_entries = 0;
+    write_index = index_write_;
     while (free_entries == 0) {
+      // LOG_DEBUG_RAW("free entries: %lu", free_entries);
       // capture a local view.
-      write_index = index_write_;
       read_index = index_read_;
       free_entries = (mask_ + read_index - write_index);
     }
+    assert(free_entries != static_cast<size_t>(0));
+    assert((free_entries & (!mask_)) == 0);
     // prepare to swap local view and global
     auto write_index_next = write_index + 1;
     // unsigned wrap around
@@ -76,19 +80,23 @@ class spsc_ring : noncopyable {
   }
 
   template <typename... Args>
+  void emplace_back(Args &&...args) {
+    emplace(std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
   bool try_emplace(Args &&...args) {
     static_assert(std::is_constructible<T, Args &&...>::value, "T must be constructible with Args&&...");
     // capture a local view.
-    auto const write_index = index_write_;
-    auto const read_index = index_read_;
-    auto free_entries = (mask_ + read_index - write_index);
+    unsigned long const write_index = index_write_;
+    unsigned long const read_index = index_read_;
+    unsigned long free_entries = (mask_ + read_index - write_index);
     if (free_entries == 0) {
       return false;
     }
     // prepare to swap local view and global
     auto write_index_next = write_index + 1;
     // unsigned wrap around
-    LOG_DEBUG_RAW("writei: %lu, writeinext: %lu", write_index, write_index_next);
     new (static_cast<T *>(data_) + (write_index & mask_) + k_padding) T(std::forward<Args>(args)...);
     // make sure new product in place before being viewed.
     std::atomic_thread_fence(std::memory_order_release);
@@ -118,44 +126,44 @@ class spsc_ring : noncopyable {
 
   T *front() noexcept {
     // capture local view;
-    auto read_index = index_read_;
-    auto write_index = index_write_;
-    auto entries = write_index - read_index;
+    unsigned long read_index = index_read_;
+    unsigned long write_index = index_write_;
+    unsigned long entries = write_index - read_index;
     if (__glibc_unlikely(entries == 0)) {
-      LOG_DEBUG_RAW("in spsc front is nullptr, w %lu, r %lu", write_index, read_index);
       return nullptr;
     }
-    LOG_DEBUG_RAW("in spsc front ready to return:  (read_index & mask_): %lu", (read_index & mask_));
-    return &((static_cast<T *>(data_))[k_padding + (read_index & mask_)]);
+    return (static_cast<T *>(data_)) + k_padding + (read_index & mask_);
   }
 
   void pop() noexcept {
     // used in dtor, has to be noexcept (effective cpp)
     static_assert(std::is_nothrow_destructible<T>::value, "T must be nothrow destructible");
-    // don't really care atomicity because only one thread would do the increment on index_read_
+    // don't really care atomicity because only one thread would do the increment on r
     // but do care about the destruction of T.
-    auto read_index = index_read_;
-    auto read_next = read_index + 1;
-    index_read_ = read_next;
-    // make sure nobody can read it
-    std::atomic_thread_fence(std::memory_order_release);
+    unsigned long read_index = index_read_;
+    unsigned long read_next = read_index + 1;
+    LOG_DEBUG_RAW("pop, after index_read would be:%lu", (read_next & mask_));
     (static_cast<T *>(data_)[k_padding + (read_index & mask_)]).~T();
+    // make sure nobody can write to it before destruction
+    std::atomic_thread_fence(std::memory_order_release);
+    index_read_ = read_next;
   }
 
   size_t size() const noexcept {
     // a not really useful member
-    auto read_index = index_read_;
-    auto write_index = index_write_;
+    unsigned long read_index = index_read_;
+    unsigned long write_index = index_write_;
     // entries
-    LOG_DEBUG_RAW("spsc size return: %lu, w %lu,r %lu", write_index - read_index, write_index, read_index);
-    return write_index - read_index;
+    unsigned long entries = write_index - read_index;
+    assert((entries & (~mask_)) == 0);
+    return entries;
   }
 
   bool empty() const noexcept { return size() == 0; }
   bool full() const noexcept {
-    auto const write_index = index_write_;
-    auto const read_index = index_read_;
-    auto free_entries = (mask_ + read_index - write_index);
+    unsigned long const write_index = index_write_;
+    unsigned long const read_index = index_read_;
+    unsigned long free_entries = (mask_ + read_index - write_index);
     if (free_entries == 0) {
       return false;
     }
@@ -187,9 +195,13 @@ class spsc_ring : noncopyable {
   // cannot be independent updated.
   //
   // a single cache line in L1
-  alignas(k_cache_line_size) size_t index_write_{0};
+  // stupid me: miss the volatile
+  // https://stackoverflow.com/questions/70195806/why-g-o2-option-make-unsigned-wrap-around-not-working/70196027#70196027
+  // the point is that in the dpdk source code there indeed have volatile qualifier
+  // I thought the volatile is useless in memory model before (...)
+  alignas(k_cache_line_size) volatile size_t index_write_{0};
   // a single cache line in L1
-  alignas(k_cache_line_size) size_t index_read_{0};
+  alignas(k_cache_line_size) volatile size_t index_read_{0};
 
   // Padding to avoid adjacent allocations to share cache line
   char padding_[k_cache_line_size - sizeof(index_read_)]{};
