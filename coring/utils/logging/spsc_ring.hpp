@@ -22,6 +22,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <bits/shared_ptr.h>
+#include <cstring>
 
 #define RAW_LOG
 // #define RAW_NDEBUG
@@ -64,7 +65,6 @@ class spsc_ring : noncopyable {
     unsigned long write_index, read_index, free_entries = 0;
     write_index = index_write_;
     while (free_entries == 0) {
-      // LOG_DEBUG_RAW("free entries: %lu", free_entries);
       // capture a local view.
       read_index = index_read_;
       free_entries = (mask_ + read_index - write_index);
@@ -142,7 +142,6 @@ class spsc_ring : noncopyable {
     // but do care about the destruction of T.
     unsigned long read_index = index_read_;
     unsigned long read_next = read_index + 1;
-    LOG_DEBUG_RAW("pop, after index_read would be:%lu", (read_next & mask_));
     (static_cast<T *>(data_)[k_padding + (read_index & mask_)]).~T();
     // make sure nobody can write to it before destruction
     std::atomic_thread_fence(std::memory_order_release);
@@ -157,6 +156,35 @@ class spsc_ring : noncopyable {
     unsigned long entries = write_index - read_index;
     assert((entries & (~mask_)) == 0);
     return entries;
+  }
+
+  bool batch_out(std::vector<T> &v) {
+    LOG_DEBUG_RAW("batch out");
+    unsigned long read_index = index_read_;
+    unsigned long write_index = index_write_;
+    // entries
+    unsigned long entries = write_index - read_index;
+    if (entries == 0) return false;
+    v.resize(v.size() + entries);
+    auto from = (read_index & mask_);
+    // win, simple copying
+    if ((write_index & mask_) > (read_index & mask_)) {
+      // really fuck me, k_padding!!!!!
+      ::memcpy(&v[v.size() - entries], static_cast<T *>(data_) + k_padding + from, entries * sizeof(T));
+      LOG_DEBUG_RAW("simple copying, e: %lu, vs: %lu", entries, v.size());
+    }  // lost, two phase copying
+    else {
+      auto part1len = capacity_ - from;
+      auto part2len = entries - part1len;
+      ::memcpy(&v[v.size() - entries], static_cast<T *>(data_) + k_padding + from, part1len * sizeof(T));
+      ::memcpy(&v[v.size() - part2len], static_cast<T *>(data_) + k_padding, part2len * sizeof(T));
+      LOG_DEBUG_RAW("e: %lu, v.sz: %lu, part1len: %lu, part2len: %lu", entries, v.size(), part1len, part2len);
+    }
+    // fuck me forgetting wrap around rules
+    auto next_read = read_index + entries;
+    std::atomic_thread_fence(std::memory_order_release);
+    index_read_ = next_read;
+    return true;
   }
 
   bool empty() const noexcept { return size() == 0; }
