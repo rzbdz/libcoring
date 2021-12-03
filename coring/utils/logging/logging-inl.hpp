@@ -2,6 +2,7 @@
 #ifndef CORING_LOGGING_INL_HPP
 #define CORING_LOGGING_INL_HPP
 #include "../fmt/format.h"
+#include "../debug.hpp"
 #include <functional>
 
 #define CAST_CSTRING
@@ -104,7 +105,9 @@ auto make_log_tuple(fmt::string_view fmt, Args &&...args) {
 template <typename... Args>
 auto make_log_task(fmt::string_view fmt, Args &&...args) {
   return [t = make_log_tuple(fmt, args...)](auto &&output_it) -> void {
-    std::apply([](auto &&o, fmt::string_view fmt, auto &&...args) { fmt::vformat_to(o, fmt, fmt::make_format_args(args...)); }, std::tuple_cat(std::tie(output_it), t));
+    std::apply(
+        [](auto &&o, fmt::string_view fmt, auto &&...args) { fmt::vformat_to(o, fmt, fmt::make_format_args(args...)); },
+        std::tuple_cat(std::tie(output_it), t));
   };
 }
 

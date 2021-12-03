@@ -53,6 +53,7 @@ class file_name_converter {
     }
     size_ = static_cast<int>(strlen(data_));
   }
+  file_name_converter() = default;
 
   const char *data_;
   int size_;
@@ -67,6 +68,7 @@ struct log_entry {
   static constexpr int pid_string_len = 6;
   // compiler optimizes it
   log_entry(file_name_t file, int line, log_level lv, const char *pid);
+  log_entry() = default;
   friend TEST;
   file_name_t file_;
   int line_;
