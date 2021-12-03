@@ -24,8 +24,7 @@
 #include <bits/shared_ptr.h>
 #include <cstring>
 
-#define RAW_LOG
-// #define RAW_NDEBUG
+#define RAW_NDEBUG
 
 #include "../debug.hpp"
 #include "../noncopyable.hpp"
@@ -159,7 +158,6 @@ class spsc_ring : noncopyable {
   }
 
   bool batch_out(std::vector<T> &v) {
-    LOG_DEBUG_RAW("batch out");
     unsigned long read_index = index_read_;
     unsigned long write_index = index_write_;
     // entries
@@ -171,14 +169,12 @@ class spsc_ring : noncopyable {
     if ((write_index & mask_) > (read_index & mask_)) {
       // really fuck me, k_padding!!!!!
       ::memcpy(&v[v.size() - entries], static_cast<T *>(data_) + k_padding + from, entries * sizeof(T));
-      LOG_DEBUG_RAW("simple copying, e: %lu, vs: %lu", entries, v.size());
     }  // lost, two phase copying
     else {
       auto part1len = capacity_ - from;
       auto part2len = entries - part1len;
       ::memcpy(&v[v.size() - entries], static_cast<T *>(data_) + k_padding + from, part1len * sizeof(T));
       ::memcpy(&v[v.size() - part2len], static_cast<T *>(data_) + k_padding, part2len * sizeof(T));
-      LOG_DEBUG_RAW("e: %lu, v.sz: %lu, part1len: %lu, part2len: %lu", entries, v.size(), part1len, part2len);
     }
     // fuck me forgetting wrap around rules
     auto next_read = read_index + entries;
