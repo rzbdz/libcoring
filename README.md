@@ -56,7 +56,7 @@ platform differences.
 The logging module of libcoring use [fmtlib](https://github.com/fmtlib/fmt)
 as front end. But both formatting job and persistence happens in background thread. By default, the
 `async_logger` would start a new thread(`std::jthread`) running **polling** procedure. It might delegate the thread to
-thread pool to manage. Different polling policies would be introduced. Normally, the trade-of is between latency and
+thread pool to manage. Different polling policies would be introduced. Normally, the trade-off is between latency and
 high throughput, when both wanted, only binary logging would be qualified, together with some facilities to preprocess
 and decode the logs (which means formatting offline).
 
