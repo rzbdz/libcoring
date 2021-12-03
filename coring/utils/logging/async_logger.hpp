@@ -7,6 +7,9 @@
 /// if we do want both best performance, the only approach would be offline formatting, which means only write dynamic
 /// data and type information to file(in binary), and use offline tools to reconstruct the complete logs
 /// @see: https://www.usenix.org/system/files/conference/atc18/atc18-yang.pdf
+///
+/// after some profiling, found that the main bottleneck would be the timestamp system,
+/// more detail see commit log, it's sad that I didn't wrote down more comments here in codes before writing commit log.
 
 #ifndef CORING_ETC_LOGGING_LOGGER_H
 #define CORING_ETC_LOGGING_LOGGER_H
@@ -17,6 +20,7 @@
 #include <utility>
 #include <iostream>
 #include <vector>
+#include <deque>
 #include <string>
 #include <thread>
 #include <functional>
@@ -30,7 +34,9 @@ namespace coring ::detail {
 
 typedef std::function<void(logger::output_iterator_t)> logging_func_t;
 typedef std::pair<logging_func_t, log_entry> log_ring_entry_t;
-typedef std::shared_ptr<spsc_ring<log_ring_entry_t>> log_ring_ptr;
+// typedef std::deque<log_ring_entry_t> ring_t;
+typedef spsc_ring<log_ring_entry_t> ring_t;
+typedef std::shared_ptr<ring_t> log_ring_ptr;
 
 extern thread_local detail::log_ring_ptr local_log_ring_ptr;
 
@@ -43,86 +49,80 @@ class async_logger : noncopyable {
   // but that brings too much coupling between threading and logger
   static constexpr size_t k_max_buffer = 1000 * 4000;
   static constexpr size_t suggested_single_log_max_len = 500;
+  static constexpr size_t ring_buffer_size = 1024;
 
  public:
-  async_logger(std::string file_name = "", off_t roll_size = k_file_roll_size, int flush_interval = 3);
+  explicit async_logger(std::string file_name = "", off_t roll_size = k_file_roll_size, int flush_interval = 3);
 
   ~async_logger() {
-    // poll();
     stop();
-    f_.force_flush();
+    output_file_.force_flush();
   }
 
  public:
   void append(std::function<void(output_iterator_t)> &&f, detail::log_entry &e) {
-    // TODO: use ring per thread
-    //    if (__glibc_unlikely(local_log_ring_ptr == nullptr)) {
-    //      local_log_ring_ptr = std::make_shared<spsc_ring<log_ring_entry_t>>(1024);
-    //    }
-    //    local_log_ring_->emplace(std::move(f), e);
-    //
-    // Ring buffer is fast! (if front end is not overwhelming)
-    // considering consumer only get a function and run on another buffer,
-    // and front end doing more networking jobs instead looping output logs,
-    // this won' t wait so long.
-    //    std::lock_guard lk(mutex_);
-    //    log_ring_.emplace(std::move(f), e);
     if (__glibc_unlikely(local_log_ring_ptr == nullptr)) {
       std::lock_guard lk(mutex_);
-      local_log_ring_ptr = std::make_shared<spsc_ring<log_ring_entry_t>>(1024);
+      local_log_ring_ptr = std::make_shared<ring_t>(ring_buffer_size);
       log_rings_.emplace_back(local_log_ring_ptr);
+      signal();
     }
-    local_log_ring_ptr->emplace(std::move(f), e);
+    local_log_ring_ptr->emplace_back(std::move(f), e);
     // wake up consumer. (if needed)
     cond_.notify_one();
   }
 
   void run() {
-    LOG_DEBUG_RAW("fuck run");
+    if (__glibc_unlikely(thread_.joinable())) {
+      stop();
+    }
     running_ = true;
-    thread_ = std::jthread{[this] { thread_f(); }};
+    thread_ = std::jthread{[this] { logging_loop(); }};
     // make sure it 's running then return to caller
     count_down_latch_.wait();
   }
-  void poll(bool force = false);
-  void busy_poll();
-  void thread_f() {
-    //
+
+  void poll();
+  void logging_loop() {
     count_down_latch_.count_down();
     while (running_) {
       poll();
-      LOG_DEBUG_RAW("poll returned");
       std::unique_lock lk(mutex_);
       cond_.wait_for(lk, std::chrono::seconds(flush_interval_));
     }
-    poll(true);
-    f_.force_flush();
-  }
-  void stop() {
-    running_ = false;
-    cond_.notify_all();
-    // this is stupid because jthread member is
-    // sometime destruct after writing_buffer,
-    // and no solution unless put jthread
-    // to main thread to have a better lifetime.
-    thread_.join();
+    force_flush_ = true;
+    poll();
+    output_file_.force_flush();
   }
 
+  void stop() {
+    running_ = false;
+    force_flush_ = true;
+    cond_.notify_all();
+    // this is stupid because jthread member is
+    // sometime destruct after writing_buffer(impl defined),
+    // and no solution unless put jthread
+    // to main thread to have a better lifetime.
+    if (thread_.joinable()) {
+      thread_.join();
+    }
+  }
+
+  void signal() { signal_ = true; }
+
  private:
-  std::string file_name_;
-  off_t roll_size_;
   const int flush_interval_;
-  bool flushed_{false};
   std::mutex mutex_{};
   std::condition_variable cond_{};
   std::latch count_down_latch_{1};
   bool running_{false};
+  bool signal_{false};
+  bool force_flush_{false};
   std::jthread thread_{};
 
  private:
   // typedef std::weak_ptr<spsc_ring<log_ring_entry_t>> weak_ring_ptr;
   std::vector<log_ring_ptr> log_rings_;
-  std::vector<log_ring_ptr> not_empty_rings_;
 
  private:
   log_buffer_ptr writing_buffer_;
@@ -131,7 +131,7 @@ class async_logger : noncopyable {
   // timestamp won't be thread local for difficult management
   // typedef std::shared_ptr<timestamp> timestamp_ptr;
   timestamp last_time_{};
-  char time_buffer_[timestamp::time_string_len];
+  char time_buffer_[timestamp::time_string_len]{};
 
   void update_datetime() {
     char *end = last_time_.format_to(time_buffer_);
@@ -158,17 +158,21 @@ class async_logger : noncopyable {
     }
   }
 
+  // These indirect writing and copying should have performance problem
+  // but not bottleneck.
+  // No more optimization would be made since the most serious
+  // bottleneck (99%) would be the timestamp system.
  private:
   void write_datetime() {
     writing_buffer_->insert(writing_buffer_->end(), time_buffer_, time_buffer_ + timestamp::time_string_len);
   }
   void write_pid(log_entry &e) {
-    LOG_DEBUG_RAW("pid: %s", e.pid_string_);
+    // LOG_DEBUG_RAW("pid: %s", e.pid_string_);
     writing_buffer_->insert(writing_buffer_->end(), e.pid_string_,
                             e.pid_string_ + coring::detail::log_entry::pid_string_len);
   }
   void write_level(log_entry &e) {
-    LOG_DEBUG_RAW("level: %s", logger::log_level_map_[e.lv_]);
+    // LOG_DEBUG_RAW("level: %s", logger::log_level_map_[e.lv_]);
     writing_buffer_->insert(writing_buffer_->end(), logger::log_level_map_[e.lv_], logger::log_level_map_[e.lv_] + 5);
   }
   void write_prefix(log_entry &e) {
@@ -181,7 +185,7 @@ class async_logger : noncopyable {
   }
 
  private:
-  log_file f_;
+  log_file output_file_;
 };
 
 }  // namespace coring::detail
