@@ -41,18 +41,6 @@ class timestamp {
             sys_timestamp_.time_since_epoch() -
             std::chrono::duration_cast<std::chrono::days>(sys_timestamp_.time_since_epoch()))} {}
 
-  // they are all pod
-  //  timestamp(timestamp &&ts) {
-  //    sys_timestamp_ = std::move(ts.sys_timestamp_);
-  //    ymd_data_ = std::move(ts.ymd_data_);
-  //    hms_data_ = std::move(ts.hms_data_);
-  //  }
-  //  timestamp &operator=(timestamp &&ts) {
-  //    sys_timestamp_ = std::move(ts.sys_timestamp_);
-  //    ymd_data_ = std::move(ts.ymd_data_);
-  //    hms_data_ = std::move(ts.hms_data_);
-  //  }
-
   // data:
  public:
   int year() { return static_cast<int>(ymd_data_.year()); }

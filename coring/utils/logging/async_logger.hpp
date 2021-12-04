@@ -34,7 +34,6 @@ namespace coring ::detail {
 
 typedef std::function<void(logger::output_iterator_t)> logging_func_t;
 typedef std::pair<logging_func_t, log_entry> log_ring_entry_t;
-// typedef std::deque<log_ring_entry_t> ring_t;
 typedef spsc_ring<log_ring_entry_t> ring_t;
 typedef std::shared_ptr<ring_t> log_ring_ptr;
 
@@ -121,7 +120,6 @@ class async_logger : noncopyable {
   std::jthread thread_{};
 
  private:
-  // typedef std::weak_ptr<spsc_ring<log_ring_entry_t>> weak_ring_ptr;
   std::vector<log_ring_ptr> log_rings_;
 
  private:
@@ -167,12 +165,10 @@ class async_logger : noncopyable {
     writing_buffer_->insert(writing_buffer_->end(), time_buffer_, time_buffer_ + timestamp::time_string_len);
   }
   void write_pid(log_entry &e) {
-    // LOG_DEBUG_RAW("pid: %s", e.pid_string_);
     writing_buffer_->insert(writing_buffer_->end(), e.pid_string_,
                             e.pid_string_ + coring::detail::log_entry::pid_string_len);
   }
   void write_level(log_entry &e) {
-    // LOG_DEBUG_RAW("level: %s", logger::log_level_map_[e.lv_]);
     writing_buffer_->insert(writing_buffer_->end(), logger::log_level_map_[e.lv_], logger::log_level_map_[e.lv_] + 5);
   }
   void write_prefix(log_entry &e) {

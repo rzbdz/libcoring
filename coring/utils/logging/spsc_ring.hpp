@@ -40,8 +40,6 @@ class spsc_ring : noncopyable {
       capacity_ = SIZE_MAX - 2 * k_padding;
     }
     mask_ = capacity_ - 1;
-    // FIXME: here bad_alloc may arise, just let it crash.
-    // data_ = new T[capacity_ + 2 * k_padding];
     data_ = ::malloc((sizeof(T)) * (capacity_ + 2 * k_padding));
 
     static_assert(alignof(spsc_ring<T>) == k_cache_line_size, "not aligned");
@@ -54,7 +52,6 @@ class spsc_ring : noncopyable {
     while (front()) {
       pop();
     }
-    // delete[] data_;
     free(data_);
   }
 
