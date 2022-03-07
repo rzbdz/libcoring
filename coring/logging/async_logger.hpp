@@ -25,8 +25,8 @@
 #include <thread>
 #include <functional>
 
-#include "../fmt/format.h"
-#include "../noncopyable.hpp"
+#include "coring/logging/fmt/format.h"
+#include "coring/utils/noncopyable.hpp"
 #include "logging.hpp"
 #include "spsc_ring.hpp"
 #include "log_file.hpp"
@@ -53,10 +53,7 @@ class async_logger : noncopyable {
  public:
   explicit async_logger(std::string file_name = "", off_t roll_size = k_file_roll_size, int flush_interval = 3);
 
-  ~async_logger() {
-    stop();
-    output_file_.force_flush();
-  }
+  ~async_logger();
 
  public:
   void append(std::function<void(output_iterator_t)> &&f, detail::log_entry &e) {
@@ -75,7 +72,6 @@ class async_logger : noncopyable {
     if (__glibc_unlikely(thread_.joinable())) {
       stop();
     }
-    running_ = true;
     thread_ = std::jthread{[this] { logging_loop(); }};
     // make sure it 's running then return to caller
     count_down_latch_.wait();
@@ -84,7 +80,7 @@ class async_logger : noncopyable {
   void poll();
   void logging_loop() {
     count_down_latch_.count_down();
-    while (running_) {
+    while (!stop_source_.stop_requested()) {
       poll();
       std::unique_lock lk(mutex_);
       cond_.wait_for(lk, std::chrono::seconds(flush_interval_));
@@ -95,7 +91,7 @@ class async_logger : noncopyable {
   }
 
   void stop() {
-    running_ = false;
+    stop_source_.request_stop();
     force_flush_ = true;
     cond_.notify_all();
     // this is stupid because jthread member is
@@ -114,7 +110,9 @@ class async_logger : noncopyable {
   std::mutex mutex_{};
   std::condition_variable cond_{};
   std::latch count_down_latch_{1};
-  bool running_{false};
+  // bool running_{false};
+  // use C++20 feature
+  std::stop_source stop_source_{};
   bool signal_{false};
   bool force_flush_{false};
   std::jthread thread_{};
@@ -129,7 +127,8 @@ class async_logger : noncopyable {
   // timestamp won't be thread local for difficult management
   // typedef std::shared_ptr<timestamp> timestamp_ptr;
   timestamp last_time_{};
-  char time_buffer_[timestamp::time_string_len]{};
+  // fuck the '\0' appended by sprintf.... fuck him fuck me;
+  char time_buffer_[timestamp::time_string_len + 1]{};
 
   void update_datetime() {
     char *end = last_time_.format_to(time_buffer_);

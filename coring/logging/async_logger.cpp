@@ -1,16 +1,16 @@
 #include "async_logger.hpp"
 #include "timestamp.hpp"
-#include "../debug.hpp"
+#include "coring/utils/debug.hpp"
 
 namespace coring::detail {
 
 thread_local detail::log_ring_ptr local_log_ring_ptr;
 
-async_logger *single = nullptr;
+async_logger *as_logger_single = nullptr;
 
 // thread_local log_ring_ptr local_log_ring_ptr;
 void async_submitter(std::function<void(logger::output_iterator_t)> &&f, log_entry &e) {
-  single->append(std::forward<std::function<void(logger::output_iterator_t)>>(f), (e));
+  as_logger_single->append(std::forward<std::function<void(logger::output_iterator_t)>>(f), (e));
 }
 async_logger::async_logger(std::string file_name, off_t roll_size, int flush_interval)
     : flush_interval_{flush_interval}, output_file_{std::move(file_name), roll_size} {
@@ -24,7 +24,7 @@ async_logger::async_logger(std::string file_name, off_t roll_size, int flush_int
   // actually should reserve more than 4
   // C=CPU cores, P=CPU busy time / running time,  0<P<=1, T=thread, T=C/P
   log_rings_.reserve(4);
-  single = this;
+  as_logger_single = this;
   logger::register_submitter(async_submitter);
 }
 
@@ -37,7 +37,8 @@ void async_logger::poll() {
     // to make this work requires a reserved log_rings_.
     rings_size = log_rings_.size();
   }
-  while (running_) {
+  // use do while to make sure nothing left
+  do {
     bool empty = true;
     for (size_t i = 0; i < rings_size; ++i) {
       auto &ring = log_rings_[i];
@@ -49,8 +50,7 @@ void async_logger::poll() {
       signal_ = false;
       break;
     }
-  }
-
+  } while (!stop_source_.stop_requested());
   assert(writing_buffer_.get());
   if (backlogs.empty() && writing_buffer_->empty()) {
     return;
@@ -69,6 +69,11 @@ void async_logger::poll() {
     writing_buffer_->clear();
     force_flush_ = false;
   }
+}
+async_logger::~async_logger() {
+  stop();
+  output_file_.force_flush();
+  as_logger_single = nullptr;
 }
 
 }  // namespace coring::detail

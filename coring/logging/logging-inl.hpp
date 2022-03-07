@@ -1,8 +1,8 @@
 
 #ifndef CORING_LOGGING_INL_HPP
 #define CORING_LOGGING_INL_HPP
-#include "../fmt/format.h"
-#include "../debug.hpp"
+#include "coring/logging/fmt/format.h"
+#include "coring/utils/debug.hpp"
 #include <functional>
 
 #define CAST_CSTRING

@@ -4,7 +4,5 @@ set(UTILS_SRCS
         thread_pool.cpp
         thread.cpp)
 
-add_subdirectory(logging)
 # include file inherited from project coring
 add_library(coring_utils ${UTILS_SRCS})
-target_link_libraries(logging)

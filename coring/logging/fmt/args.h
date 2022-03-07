@@ -34,7 +34,7 @@ const T &unwrap(const std::reference_wrapper<T> &v) {
 
 class dynamic_arg_list {
   // Workaround for clang's -Wweak-vtables. Unlike for regular classes, for
-  // templates it doesn't complain about inability to deduce single translation
+  // templates it doesn't complain about inability to deduce as_logger_single translation
   // unit for placing vtable. So storage_node_base is made a fake template.
   template <typename = void>
   struct node {

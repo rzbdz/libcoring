@@ -4,4 +4,4 @@ SET(LOG_SRCS
         )
 add_library(logging ${LOG_SRCS})
 add_subdirectory(fmt)
-target_link_libraries(logging fmt)
+target_link_libraries(logging fmt coring_utils)

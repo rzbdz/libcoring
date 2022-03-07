@@ -1,4 +1,4 @@
-/// lock-free single producer single consumer ring buffer (bounded)
+/// lock-free as_logger_single producer as_logger_single consumer ring buffer (bounded)
 ///
 /// It's simple to implement a lock free SPSC ring buffer for there won't be any contention.
 /// But there are some details need to be handled to implement correctly and with high efficiency.
@@ -26,8 +26,8 @@
 
 #define RAW_NDEBUG
 
-#include "../debug.hpp"
-#include "../noncopyable.hpp"
+#include "coring/utils/debug.hpp"
+#include "coring/utils/noncopyable.hpp"
 namespace coring {
 template <typename T>
 class spsc_ring : noncopyable {
@@ -159,7 +159,9 @@ class spsc_ring : noncopyable {
     unsigned long write_index = index_write_;
     // entries
     unsigned long entries = write_index - read_index;
-    if (entries == 0) return false;
+    if (entries == 0) {
+      return false;
+    }
     v.resize(v.size() + entries);
     auto from = (read_index & mask_);
     // win, simple copying
@@ -215,13 +217,13 @@ class spsc_ring : noncopyable {
   // in the same line, when producer update read, it would make index_write
   // cannot be independent updated.
   //
-  // a single cache line in L1
+  // a as_logger_single cache line in L1
   // stupid me: miss the volatile
   // https://stackoverflow.com/questions/70195806/why-g-o2-option-make-unsigned-wrap-around-not-working/70196027#70196027
   // the point is that in the dpdk source code there indeed have volatile qualifier
   // I thought the volatile is useless in memory model before (...)
   alignas(k_cache_line_size) volatile size_t index_write_{0};
-  // a single cache line in L1
+  // a as_logger_single cache line in L1
   alignas(k_cache_line_size) volatile size_t index_read_{0};
 
   // Padding to avoid adjacent allocations to share cache line

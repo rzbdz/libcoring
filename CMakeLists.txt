@@ -10,5 +10,6 @@ include_directories(${PROJECT_SOURCE_DIR})
 
 add_subdirectory(coring/utils)
 add_subdirectory(coring/net)
+add_subdirectory(coring/logging)
 # add_subdirectory(coring/io)
 add_subdirectory(coring/test)

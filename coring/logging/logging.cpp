@@ -1,6 +1,6 @@
 
 #include "logging.hpp"
-#include "../thread.hpp"
+#include "coring/utils/thread.hpp"
 
 namespace coring {
 
