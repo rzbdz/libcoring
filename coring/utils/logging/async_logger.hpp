@@ -48,7 +48,7 @@ class async_logger : noncopyable {
   // but that brings too much coupling between threading and logger
   static constexpr size_t k_max_buffer = 1000 * 4000;
   static constexpr size_t suggested_single_log_max_len = 500;
-  static constexpr size_t ring_buffer_size = 1024;
+  static constexpr size_t ring_buffer_size = 8192;
 
  public:
   explicit async_logger(std::string file_name = "", off_t roll_size = k_file_roll_size, int flush_interval = 3);
