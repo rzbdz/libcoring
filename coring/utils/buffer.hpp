@@ -1,8 +1,8 @@
 #ifndef CORING_BUFFER_HPP
 #define CORING_BUFFER_HPP
 
-#include "../net/endian.hpp"
-#include "../utils/debug.hpp"
+#include "coring/net/endian.hpp"
+#include "coring/utils/debug.hpp"
 
 #include <vector>
 #include <string>
@@ -146,8 +146,8 @@ class buffer {
 
  private:
   void LOG_B() {
-    LOG_INFO("info of buffer: %p, index_con: %lu, index_pro: %lu, sz: %lu, can_r: %lu, can_w: %lu, capa: %lu", (void *)(this), index_read_, index_write_, data_.size(), readable(), writable(),
-             capacity());
+    LOG_INFO("info of buffer: %p, index_con: %lu, index_pro: %lu, sz: %lu, can_r: %lu, can_w: %lu, capa: %lu",
+             (void *)(this), index_read_, index_write_, data_.size(), readable(), writable(), capacity());
   }
   std::vector<char> data_;
   size_t index_read_{0};
