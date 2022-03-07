@@ -1,10 +1,10 @@
 # inherited from coring
 set(UTILS_SRCS
-        logging/async_logger.cpp
         codec.cpp
-        thread_pool.cpp)
+        thread_pool.cpp
+        thread.cpp)
 
-add_subdirectory(fmt)
+add_subdirectory(logging)
 # include file inherited from project coring
 add_library(coring_utils ${UTILS_SRCS})
-target_link_libraries(coring_utils fmt)
+target_link_libraries(logging)
