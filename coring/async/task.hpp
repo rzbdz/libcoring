@@ -11,6 +11,9 @@
 #include <cstdint>
 #include <cassert>
 #include <coroutine>
+#include "broken_promise.hpp"
+#include "coring/async/detail/remove_rvalue_reference.hpp"
+#include "coring/async/awaitable_traits.hpp"
 
 namespace coring {
 template <typename T>
@@ -33,7 +36,7 @@ class task_promise_base {
   };
 
  public:
-  task_promise_base() noexcept {};
+  task_promise_base() noexcept = default;
 
   auto initial_suspend() noexcept { return std::suspend_always{}; }
 
@@ -48,7 +51,7 @@ class task_promise_base {
 template <typename T>
 class task_promise final : public task_promise_base {
  public:
-  task_promise() noexcept {};
+  task_promise() noexcept = default;
 
   ~task_promise() {
     switch (m_resultType) {
@@ -164,7 +167,7 @@ class [[nodiscard]] task {
 
     explicit awaitable_base(std::coroutine_handle<promise_type> coroutine) noexcept : my_continuation_(coroutine) {}
 
-    bool await_ready() const noexcept { return !my_continuation_ || my_continuation_.done(); }
+    [[nodiscard]] bool await_ready() const noexcept { return !my_continuation_ || my_continuation_.done(); }
 
     std::coroutine_handle<> await_suspend(std::coroutine_handle<> awaitingCoroutine) noexcept {
       my_continuation_.promise().set_continuation(awaitingCoroutine);
@@ -173,11 +176,6 @@ class [[nodiscard]] task {
   };
 
  public:
-  template <typename Scheduler_>
-  std::coroutine_handle<> bind_scheduler(Scheduler_ s) {
-    s.register_task_handle(this->my_continuation_);
-  }
-
   task() noexcept : my_continuation_(nullptr) {}
 
   explicit task(std::coroutine_handle<promise_type> coro) : my_continuation_(coro) {}
@@ -212,7 +210,7 @@ class [[nodiscard]] task {
   /// Query if the task result is complete.
   ///
   /// Awaiting a task that is ready is guaranteed not to block/suspend.
-  bool is_ready() const noexcept { return !my_continuation_ || my_continuation_.done(); }
+  [[nodiscard]] bool is_ready() const noexcept { return !my_continuation_ || my_continuation_.done(); }
 
   auto operator co_await() const &noexcept {
     struct awaitable : awaitable_base {
@@ -220,7 +218,7 @@ class [[nodiscard]] task {
 
       decltype(auto) await_resume() {
         if (!this->my_continuation_) {
-          throw "broken_promise{}";
+          throw broken_promise{};
         }
 
         return this->my_continuation_.promise().result();
@@ -236,7 +234,7 @@ class [[nodiscard]] task {
 
       decltype(auto) await_resume() {
         if (!this->my_continuation_) {
-          throw "broken_promise{}";
+          throw broken_promise{};
         }
 
         return std::move(this->my_continuation_.promise()).result();
@@ -249,7 +247,7 @@ class [[nodiscard]] task {
   /// \brief
   /// Returns an awaitable that will await completion of the task without
   /// attempting to retrieve the result.
-  auto when_ready() const noexcept {
+  [[nodiscard]] auto when_ready() const noexcept {
     struct awaitable : awaitable_base {
       using awaitable_base::awaitable_base;
 
@@ -262,6 +260,7 @@ class [[nodiscard]] task {
  private:
   std::coroutine_handle<promise_type> my_continuation_;
 };
+
 struct async_run {
   struct promise_type {
     async_run get_return_object() { return {}; }
@@ -271,20 +270,27 @@ struct async_run {
     void return_void() {}
   };
 };
+
 namespace detail {
 template <typename T>
 task<T> task_promise<T>::get_return_object() noexcept {
   return task<T>{std::coroutine_handle<task_promise>::from_promise(*this)};
 }
 
-inline task<void> task_promise<void>::get_return_object() noexcept { return task<void>{std::coroutine_handle<task_promise>::from_promise(*this)}; }
+inline task<void> task_promise<void>::get_return_object() noexcept {
+  return task<void>{std::coroutine_handle<task_promise>::from_promise(*this)};
+}
 
 template <typename T>
 task<T &> task_promise<T &>::get_return_object() noexcept {
   return task<T &>{std::coroutine_handle<task_promise>::from_promise(*this)};
 }
-
 }  // namespace detail
+template <typename Awaitable>
+auto make_task(Awaitable awaitable)
+    -> task<coring::detail::remove_rvalue_reference_t<typename coring::awaitable_traits<Awaitable>::await_result_t>> {
+  co_return co_await static_cast<Awaitable &&>(awaitable);
+}
 }  // namespace coring
 
 #endif
