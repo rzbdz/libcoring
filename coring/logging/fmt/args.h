@@ -92,13 +92,17 @@ class dynamic_format_arg_store
     static constexpr detail::type mapped_type = detail::mapped_type_constant<T, Context>::value;
 
     enum {
-      value = !(detail::is_reference_wrapper<T>::value || std::is_same<T, basic_string_view<char_type>>::value || std::is_same<T, detail::std_string_view<char_type>>::value ||
-                (mapped_type != detail::type::cstring_type && mapped_type != detail::type::string_type && mapped_type != detail::type::custom_type))
+      value = !(detail::is_reference_wrapper<T>::value || std::is_same<T, basic_string_view<char_type>>::value ||
+                std::is_same<T, detail::std_string_view<char_type>>::value ||
+                (mapped_type != detail::type::cstring_type && mapped_type != detail::type::string_type &&
+                 mapped_type != detail::type::custom_type))
     };
   };
 
   template <typename T>
-  using stored_type = conditional_t<detail::is_string<T>::value && !has_formatter<T, Context>::value && !detail::is_reference_wrapper<T>::value, std::basic_string<char_type>, T>;
+  using stored_type = conditional_t<detail::is_string<T>::value && !has_formatter<T, Context>::value &&
+                                        !detail::is_reference_wrapper<T>::value,
+                                    std::basic_string<char_type>, T>;
 
   // Storage of basic_format_arg must be contiguous.
   std::vector<basic_format_arg<Context>> data_;
@@ -110,7 +114,10 @@ class dynamic_format_arg_store
 
   friend class basic_format_args<Context>;
 
-  unsigned long long get_types() const { return detail::is_unpacked_bit | data_.size() | (named_info_.empty() ? 0ULL : static_cast<unsigned long long>(detail::has_named_args_bit)); }
+  unsigned long long get_types() const {
+    return detail::is_unpacked_bit | data_.size() |
+           (named_info_.empty() ? 0ULL : static_cast<unsigned long long>(detail::has_named_args_bit));
+  }
 
   const basic_format_arg<Context> *data() const { return named_info_.empty() ? data_.data() : data_.data() + 1; }
 

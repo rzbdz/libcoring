@@ -6,10 +6,10 @@ cmake-build/
 build/
 Makefile
 etc/
-test/
 trivial/
 *.out
 public/
 recipes/
+/test/
 *.gch
 *.h.gch
