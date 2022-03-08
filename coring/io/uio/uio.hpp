@@ -15,9 +15,9 @@
 #include <execinfo.h>
 #endif
 
-#include "../../async/task.hpp"
-#include "../../utils/io_utils.hpp"
-#include "../../async/uio_async.hpp"
+#include "coring/async/task.hpp"
+#include "coring/utils/io_utils.hpp"
+#include "coring/async/uio_async.hpp"
 
 namespace coring::detail {
 class uio {
@@ -83,6 +83,26 @@ class uio {
     io_uring_cq_advance(&ring, cqe_count);
     cqe_count = 0;
   }
+
+  /**
+   * Cancel a request
+   * Attempt to cancel an already issued request.  addr must contain the user_data field of the request that
+   * should be cancelled. The cancellation request will complete with one of the following results codes. If
+   * found, the res field of the cqe will contain 0. If not found, res will contain -ENOENT.  If  found  and
+   * attempted  cancelled,  the  res  field will contain -EALREADY. In this case, the request may or may not
+   * terminate. In general, requests that are interruptible (like socket IO) will get cancelled, while  disk
+   * IO requests cannot be cancelled if already started.  Available since 5.5.
+   * @param user_data
+   * @param flags
+   * @param iflags
+   * @return a task
+   */
+  uio_awaitable cancel(void *user_data, int flags = 0, uint8_t iflags = 0) {
+    auto *sqe = io_uring_get_sqe_safe();
+    io_uring_prep_cancel(sqe, user_data, flags);
+    return make_awaitable(sqe, iflags);
+  }
+
   /** Read data into multiple buffers asynchronously
    * @see preadv2(2)
    * @see io_uring_enter(2) IORING_OP_READV
