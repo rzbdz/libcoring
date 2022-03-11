@@ -12,32 +12,41 @@
 #include <coroutine>
 
 namespace coring::detail {
-// encapsulated to io_uring user data as completion token
-struct uio_token {
-  friend struct uio_awaitable;
+// encapsulated to io_uring_context user data as completion token
+struct io_token {
+  friend struct io_awaitable;
 
   // result is a int value (same as system call)
   void resolve(int result) noexcept {
     this->result = result;
     continuation.resume();
   }
-
  private:
   std::coroutine_handle<> continuation;
   int result = 0;
 };
 
-static_assert(std::is_trivially_destructible_v<uio_token>);
+static_assert(std::is_trivially_destructible_v<io_token>);
+}  // namespace coring::detail
 
-struct uio_awaitable {
-  uio_awaitable(io_uring_sqe* sqe) noexcept : sqe(sqe) {}
+namespace coring {
+
+struct io_cancel_token {
+  detail::io_token *token_ = nullptr;
+};
+
+}  // namespace coring
+
+namespace coring::detail {
+struct io_awaitable {
+  io_awaitable(io_uring_sqe *sqe) noexcept : sqe(sqe) {}
 
   auto operator co_await() {
     struct uio_awaiter {
-      uio_token token{};
-      io_uring_sqe* sqe;
+      io_token token{};
+      io_uring_sqe *sqe;
 
-      uio_awaiter(io_uring_sqe* sqe) : sqe(sqe) {}
+      uio_awaiter(io_uring_sqe *sqe) : sqe(sqe) {}
 
       constexpr bool await_ready() const noexcept { return false; }
 
@@ -51,9 +60,11 @@ struct uio_awaitable {
 
     return uio_awaiter(sqe);
   }
+  io_cancel_token get_cancel_token() { return {token}; }
 
  private:
-  io_uring_sqe* sqe;
+  io_uring_sqe *sqe;
+  io_token *token;
 };
 
 }  // namespace coring::detail
