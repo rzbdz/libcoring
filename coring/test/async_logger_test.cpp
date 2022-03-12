@@ -3,9 +3,9 @@
 #include "coring/logging/async_logger.hpp"
 
 using namespace coring;
-
+#define LOG_FILE_NAME "test266"
 void single_thread_async(int time, int divide) {
-  async_logger as{"snf"};
+  async_logger as{LOG_FILE_NAME};
   int s = coring::detail::async_logger::ring_buffer_size * time / divide;
   std::cout << "AS init, begin as_logger_single thread testing (no full," << s << " )...) " << std::endl;
   as.run();
@@ -26,7 +26,7 @@ void single_thread_async(int time, int divide) {
 double res[3];
 void multi_thread_async(int time, int divide) {
   int scale = coring::detail::async_logger::ring_buffer_size * time / divide;
-  async_logger as{"mnf"};
+  async_logger as{LOG_FILE_NAME};
   std::cout << "AS init, begin multiple thread testing (no full, " << scale << ")..." << std::endl;
   as.run();
   auto f = [scale](int j) -> void {
@@ -53,11 +53,27 @@ void multi_thread_async(int time, int divide) {
   std::cout << res[1] << "ns per submit in thread 1" << std::endl;
   std::cout << res[2] << "ns per submit in thread 2" << std::endl;
 }
-int main() {
-  std::cout << "Queue size: " << coring::detail::async_logger::ring_buffer_size << std::endl;
+int main(int argc, char *argv[]) {
   // sad that async_logger is designed in singleton pattern,
   // no way to run them all at a time.
   // single_thread_async(2, 1);
-  single_thread_async(3, 1);
+  if (argc < 4) {
+    std::cout << "No, you have to input args:\n"
+                 "- For multi-thread(3), use \"./program-name -m [multiple factor] [division factor]\"\n"
+                 "- For single-thread, use \"./program-name -s [multiple factor] [division factor] \""
+              << std::endl;
+    return 0;
+  }
+  if (argv[1][0] != '-') {
+    std::cout << "fuck you, don't trick me" << std::endl;
+    abort();
+  }
+  int mf = std::stoi(argv[2]), df = std::stoi(argv[3]);
+  if (argv[1][1] == 'm') {
+    multi_thread_async(mf, df);
+  } else if (argv[1][1] == 's') {
+    single_thread_async(mf, df);
+  } else {
+  }
   return 0;
 }
