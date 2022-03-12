@@ -1,5 +1,5 @@
 #include "async_logger.hpp"
-#include "timestamp.hpp"
+#include "log_timestamp.hpp"
 #include "coring/utils/debug.hpp"
 
 namespace coring::detail {
@@ -16,7 +16,7 @@ async_logger::async_logger(std::string file_name, off_t roll_size, int flush_int
     : flush_interval_{flush_interval}, output_file_{std::move(file_name), roll_size} {
   // init the time_buffer first, at lease the date would be reused.
   update_datetime();
-  time_buffer_[timestamp::time_string_len - 1] = '\0';
+  time_buffer_[log_timestamp::time_string_len - 1] = '\0';
   // setup char buffer, performance problem do exist, but not as bottleneck.
   writing_buffer_ = std::make_unique<log_buffer_t>();
   // init an almost 4mb char buffer, not 4k aligned to avoid cache sharing
@@ -56,7 +56,7 @@ void async_logger::poll() {
     return;
   }
   for (auto &h : backlogs) {
-    update_datetime(timestamp(h.second.ts_));
+    update_datetime(log_timestamp(h.second.ts_));
     write_prefix(h.second);
     auto out = std::back_inserter(*writing_buffer_);
     h.first(out);

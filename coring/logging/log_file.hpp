@@ -5,7 +5,7 @@
 #include <istream>
 #include <fstream>
 #include <utility>
-#include "timestamp.hpp"
+#include "log_timestamp.hpp"
 namespace coring {
 // 40MB
 constexpr off_t k_file_roll_size = 40 * 1024 * 1024;
@@ -17,7 +17,7 @@ class log_file {
     roll_file();
   }
   void roll_file() {
-    timestamp ts;
+    log_timestamp ts;
     char buf[40];
     char *ret = ts.format_date_to(buf) - 1;
     ret[0] = '.';

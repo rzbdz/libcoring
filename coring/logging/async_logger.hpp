@@ -8,7 +8,7 @@
 /// data and type information to file(in binary), and use offline tools to reconstruct the complete logs
 /// @see: https://www.usenix.org/system/files/conference/atc18/atc18-yang.pdf
 ///
-/// after some profiling, found that the main bottleneck would be the timestamp system,
+/// after some profiling, found that the main bottleneck would be the log_timestamp system,
 /// more detail see commit log, it's sad that I didn't wrote down more comments here in codes before writing commit log.
 
 #ifndef CORING_ETC_LOGGING_LOGGER_H
@@ -124,25 +124,26 @@ class async_logger : noncopyable {
   log_buffer_ptr writing_buffer_;
 
  private:
-  // timestamp won't be thread local for difficult management
-  // typedef std::shared_ptr<timestamp> timestamp_ptr;
-  timestamp last_time_{};
+  // log_timestamp won't be thread local for difficult management
+  // typedef std::shared_ptr<log_timestamp> timestamp_ptr;
+  log_timestamp last_time_{};
   // fuck the '\0' appended by sprintf.... fuck him fuck me;
-  char time_buffer_[timestamp::time_string_len + 1]{};
+  char time_buffer_[log_timestamp::time_string_len + 1]{};
 
   void update_datetime() {
     char *end = last_time_.format_to(time_buffer_);
-    assert_eq(end, time_buffer_ + timestamp::time_string_len);
+    assert_eq(end, time_buffer_ + log_timestamp::time_string_len);
   }
   void update_datetime_time() {
-    char *end = last_time_.format_time_to(time_buffer_ + timestamp::fmt_date_len);
-    assert_eq(end, time_buffer_ + timestamp::time_string_len);
+    char *end = last_time_.format_time_to(time_buffer_ + log_timestamp::fmt_date_len);
+    assert_eq(end, time_buffer_ + log_timestamp::time_string_len);
   }
   void update_datetime_micro() {
-    char *end = last_time_.format_micro_to(time_buffer_ + timestamp::fmt_date_len + timestamp::fmt_base_time_len);
-    assert_eq(end, time_buffer_ + timestamp::time_string_len);
+    char *end =
+        last_time_.format_micro_to(time_buffer_ + log_timestamp::fmt_date_len + log_timestamp::fmt_base_time_len);
+    assert_eq(end, time_buffer_ + log_timestamp::time_string_len);
   }
-  void update_datetime(timestamp &&ts) {
+  void update_datetime(log_timestamp &&ts) {
     std::swap(last_time_, ts);
     if (ts.same_date(last_time_)) {
       if (ts.same_second(last_time_)) {
@@ -158,10 +159,10 @@ class async_logger : noncopyable {
   // These indirect writing and copying should have performance problem
   // but not bottleneck.
   // No more optimization would be made since the most serious
-  // bottleneck (99%) would be the timestamp system.
+  // bottleneck (99%) would be the log_timestamp system.
  private:
   void write_datetime() {
-    writing_buffer_->insert(writing_buffer_->end(), time_buffer_, time_buffer_ + timestamp::time_string_len);
+    writing_buffer_->insert(writing_buffer_->end(), time_buffer_, time_buffer_ + log_timestamp::time_string_len);
   }
   void write_pid(log_entry &e) {
     writing_buffer_->insert(writing_buffer_->end(), e.pid_string_,

@@ -2,7 +2,7 @@
 #ifndef CORING_LOGGING_HPP
 #define CORING_LOGGING_HPP
 
-#include "timestamp.hpp"
+#include "log_timestamp.hpp"
 #include "logging-inl.hpp"
 #include <chrono>
 #include <vector>
@@ -73,8 +73,8 @@ struct log_entry {
   file_name_t file_;
   int line_;
   log_level lv_;
-  // timestamp ts_;
-  timestamp::raw_type ts_;
+  // log_timestamp ts_;
+  log_timestamp::raw_type ts_;
   const char *pid_string_;
 };
 }  // namespace coring::detail

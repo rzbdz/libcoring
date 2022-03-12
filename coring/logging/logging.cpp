@@ -15,5 +15,5 @@ logger::logger(file_name_t file, int line, log_level level)
 
 namespace coring::detail {
 log_entry::log_entry(file_name_t file, int line, log_level lv, const char *pid)
-    : file_(file), line_(line), lv_(lv), ts_{timestamp::now()}, pid_string_{pid} {}
+    : file_(file), line_(line), lv_(lv), ts_{log_timestamp::now()}, pid_string_{pid} {}
 }  // namespace coring::detail
