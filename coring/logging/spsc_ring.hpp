@@ -222,6 +222,8 @@ class spsc_ring : noncopyable {
   // https://stackoverflow.com/questions/70195806/why-g-o2-option-make-unsigned-wrap-around-not-working/70196027#70196027
   // the point is that in the dpdk source code there indeed have volatile qualifier
   // I thought the volatile is useless in memory model before (...)
+  // TODO: Don't use volatile + memory fence, use std::atomic instead
+  // https://stackoverflow.com/questions/4557979/when-to-use-volatile-with-multi-threading
   alignas(k_cache_line_size) volatile size_t index_write_{0};
   // a as_logger_single cache line in L1
   alignas(k_cache_line_size) volatile size_t index_read_{0};
