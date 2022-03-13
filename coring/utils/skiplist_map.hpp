@@ -38,7 +38,7 @@ struct default_skiplist_comparator {
 /// \tparam ValueType
 /// \tparam Comparator Make sure your comparator is a function, and it should be
 ///                    like that: comparator(a, b) returns true if a <= b.
-template <typename KeyType, typename ValueType, KeyType minKey, KeyType maxKey, ValueType emptyVal,
+template <typename KeyType, typename ValueType, KeyType minKey, KeyType maxKey,
           typename Comparator = detail::default_skiplist_comparator<KeyType>>
 class skiplist_map {
  private:
@@ -54,6 +54,9 @@ class skiplist_map {
     std::pair<KeyType, ValueType> data_;
     // TODO: it waste a lot of memory... auto shrinking is needed.
     std::vector<_skiplist_node *> level_next_;
+    _skiplist_node(KeyType key) : data_{key, ValueType{}}, level_next_(MAX_LEVEL) {
+      static_assert(std::is_trivially_constructible_v<ValueType>);
+    }
     explicit _skiplist_node(std::pair<KeyType, ValueType> &&data, int size = MAX_LEVEL)
         : data_{std::move(data)}, level_next_(size) {}
     explicit _skiplist_node(KeyType key, ValueType val, int size = MAX_LEVEL)
@@ -155,8 +158,8 @@ class skiplist_map {
   std::mutex mutex_{};
 
  public:
-  skiplist_map() : head_(minKey, emptyVal, MAX_LEVEL) {
-    auto max_dummy = new _skiplist_node{maxKey, emptyVal, MAX_LEVEL};
+  skiplist_map() : head_(minKey) {
+    auto max_dummy = new _skiplist_node{maxKey};
     for (int i = MAX_LEVEL - 1; i >= 0; --i) {
       head_.level_next_[i] = max_dummy;
     }
@@ -262,6 +265,7 @@ class skiplist_map {
   }
 
  public:
+  const std::pair<KeyType, ValueType> &peek_first() { return head_.level_next_[0].data_; }
   template <typename FKeyType>
   auto lower_bound(FKeyType &&tar) {
     return find_bound<true>(std::forward<FKeyType>(tar));
