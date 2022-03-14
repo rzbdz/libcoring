@@ -31,10 +31,9 @@ struct is_awaiter : std::false_type {};
 // a coroutine_handle<void>. This may result in a false-result for some
 // types which are only awaitable within a certain context.
 template <typename T>
-struct is_awaiter<
-    T, std::void_t<decltype(std::declval<T>().await_ready()),
-                   decltype(std::declval<T>().await_suspend(std::declval<std::coroutine_handle<>>())),
-                   decltype(std::declval<T>().await_resume())>>
+struct is_awaiter<T, std::void_t<decltype(std::declval<T>().await_ready()),
+                                 decltype(std::declval<T>().await_suspend(std::declval<std::coroutine_handle<>>())),
+                                 decltype(std::declval<T>().await_resume())>>
     : std::conjunction<std::is_constructible<bool, decltype(std::declval<T>().await_ready())>,
                        detail::is_valid_await_suspend_return_value<decltype(std::declval<T>().await_suspend(
                            std::declval<std::coroutine_handle<>>()))>> {};

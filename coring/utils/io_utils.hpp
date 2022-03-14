@@ -4,7 +4,6 @@
 ///
 /// author: codeinred
 ///
-/// (I didn't reinvent the wheel) X<
 
 #ifndef CORING_UTILS_HPP
 #define CORING_UTILS_HPP

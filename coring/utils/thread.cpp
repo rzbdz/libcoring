@@ -1,9 +1,9 @@
 #include "thread.hpp"
 #include <type_traits>
 
-// For user data (a bad design, will be revised) such as uio_context
+// For user data (a bad design, will be revised) such as io_context
 #define SET_KEY_DATA_CODE_GEN(NO)                                                          \
-  thread_local void* t_key_data[NO];                                                        \
+  thread_local void *t_key_data[NO];                                                       \
   void set_key_data(void *data_ptr, int no) { coring::thread::t_key_data[no] = data_ptr; } \
   void *get_key_data(int no) { return coring::thread::t_key_data[no]; }
 
