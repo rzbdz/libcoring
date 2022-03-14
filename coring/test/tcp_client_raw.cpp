@@ -3,6 +3,7 @@
 #include "coring/utils/debug.hpp"
 #include "coring/io/io_context.hpp"
 #include "coring/utils/thread.hpp"
+#include "coring/net/endpoint.hpp"
 #include <thread>
 #include <netinet/in.h>
 #include <arpa/inet.h>

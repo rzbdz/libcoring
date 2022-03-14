@@ -2,7 +2,7 @@
 #define CORING_ENDIAN_HPP
 #include <cstdint>
 #include <endian.h>
-namespace coring {
+namespace coring::net {
 // I forgot uint8 before, sad. X<
 template <typename other_t_>
 inline other_t_ host_to_network(other_t_) = delete;
@@ -46,5 +46,5 @@ inline int16_t network_to_host(int16_t net16) { return be16toh(net16); }
 
 inline int8_t network_to_host(int8_t net8) { return net8; }
 
-}  // namespace coring
+}  // namespace coring::net
 #endif  // CORING_ENDIAN_HPP

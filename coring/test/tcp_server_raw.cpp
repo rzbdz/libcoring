@@ -3,6 +3,7 @@
 #include "coring/utils/debug.hpp"
 #include "coring/io/io_context.hpp"
 #include "coring/utils/thread.hpp"
+#include "coring/net/endpoint.hpp"
 #include <thread>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -18,10 +19,10 @@ auto acceptor(int fd, const std::stop_source &src, io_cancel_token *cancel_tk) -
   // Do not forget that parameters of accept is both input and output...
   // I follow the rule that use const ref as input, use ptr when modification is necessary.
   // As for the system call, just remember the input parameter would be cosnt T*.
-  sockaddr_in peeraddr{};
-  auto addrlen = sizeof(peeraddr);
-  auto pa = reinterpret_cast<sockaddr *>(&peeraddr);
-  auto alp = reinterpret_cast<socklen_t *>(&addrlen);
+  socket::endpoint peeraddr{};
+  auto addrlen = socket::endpoint::len;
+  auto alp = &addrlen;
+  auto pa = peeraddr.as_sockaddr();
   for (; src.stop_requested() == false;) {
     auto act = ctx->accept(fd, pa, alp);
     *cancel_tk = act.get_cancel_token();
@@ -38,15 +39,9 @@ auto acceptor(int fd, const std::stop_source &src, io_cancel_token *cancel_tk) -
 void run_server() {
   io_context ctx{};
   int fd;
-  struct sockaddr_in servaddr {};
   if ((fd = ::socket(AF_INET, SOCK_STREAM, 0)) < 0) abort();  // NOLINT
-  bzero(&servaddr, sizeof(servaddr));
-  servaddr.sin_family = AF_INET;
-  servaddr.sin_port = htons(1025);
-  if (::inet_pton(AF_INET, "127.0.0.1", &servaddr.sin_addr) <= 0) {
-    ASSERT_EQ(1, 2);
-  }
-  [[maybe_unused]] auto bi = ::bind(fd, reinterpret_cast<const sockaddr *>(&servaddr), sizeof(servaddr));
+  socket::endpoint servaddr("127.0.0.1", 1025);
+  [[maybe_unused]] auto bi = ::bind(fd, servaddr.as_sockaddr(), sizeof(servaddr));
   ::listen(fd, 5);
   std::stop_source src{};
   // Not finished yet -- cancellation support.
