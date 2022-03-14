@@ -19,8 +19,8 @@ auto acceptor(int fd, const std::stop_source &src, io_cancel_token *cancel_tk) -
   // Do not forget that parameters of accept is both input and output...
   // I follow the rule that use const ref as input, use ptr when modification is necessary.
   // As for the system call, just remember the input parameter would be cosnt T*.
-  socket::endpoint peeraddr{};
-  auto addrlen = socket::endpoint::len;
+  net::endpoint peeraddr{};
+  auto addrlen = net::endpoint::len;
   auto alp = &addrlen;
   auto pa = peeraddr.as_sockaddr();
   for (; src.stop_requested() == false;) {

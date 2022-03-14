@@ -4,16 +4,16 @@
 #pragma once
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <cstring>
 #include <type_traits>
 #include <string>
 #include <stdexcept>
 #include <ranges>
 #include <vector>
-#include <netdb.h>
 #include <cassert>
 #include "endian.hpp"
-namespace coring::socket {
+namespace coring::net {
 namespace detail {
 template <typename SockAddrIn>
 const struct sockaddr *sockaddr_cast(const SockAddrIn *addr) {
@@ -84,11 +84,12 @@ class endpoint {
   }
   [[nodiscard]] sa_family_t family() const { return addr4_.sin_family; }
   [[nodiscard]] uint64_t port() const { return addr4_.sin_port; }
-  auto as_sockaddr() { return socket::detail::sockaddr_cast(&addr4_); }
+  auto as_sockaddr() { return detail::sockaddr_cast(&addr4_); }
+  auto as_sockaddr_in() { return &addr4_; }
 
  private:
   ::sockaddr_in addr4_;
 };
-}  // namespace coring::socket
+}  // namespace coring::net
 
 #endif  // CORING_ENDPOINT_HPP
