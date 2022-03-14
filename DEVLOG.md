@@ -10,7 +10,7 @@ page.
 - utils: some utilities for other module or library user (e.g. threading, buffer).
 - logging (depend on utils): an async logging module, it performs formatting and disk writing for less latency .
 - async: supports for C++20 coroutine. (most of them are from [cppcoro](https://github.com/lewissbaker/cppcoro))
-- io (depend on async): io_uring_context and proactor (event loop) supports based on coroutine.
+- io (depend on async): io_context and proactor (event loop) supports based on coroutine.
 - net (depend on io): supports for socket and tcp connection.
 - test: test for all modules using google test.
 
@@ -38,10 +38,10 @@ proactor pattern in libcoring tcp server (might not be the final version):
 The basic pattern of the libcoring is **Paroactor** (combined with **Asynchronous-Completion-Token** and
 **Acceptor-Connector**
 patterns as POSA2 stated), which is tightly cooperated with the asynchronous I/O operation interfaces provided by the
-O/S (**io_uring_context** in linux kernel 5.6 and after).
+O/S (**io_uring** in linux kernel 5.6 and after).
 
 The proactor entity is named `io_context` (just like the one in boost::asio). In current design, one io_context is
-linked to one io_uring_context submission queue, and also one thread (to avoid complicated synchronizing).
+linked to one io_uring submission queue, and also one thread (to avoid complicated synchronizing).
 
 The high level abstraction won't need explicit calls to `io_context` object to do threading (but the acceptor main
 loop (proactor) thread context is still required as Acceptor-Connector pattern works), everything about the connection
@@ -61,12 +61,12 @@ libraries in the past for linux doesn't have a good application interface while 
 the **I/O Completion Port** interface in usability and performance together with **await/async** coroutine (Task)
 concept in C#.
 
-However, with the new `io_uring_context` interfaces introduced in linux kernel 5 and the new compiler level
+However, with the new `io_uring` interfaces introduced in linux kernel 5 and the new compiler level
 implementation of coroutine in C++20, things begin will change.
 
 ### Boost::asio
 
-Boost::asio do support `io_uring_context` and coroutine for C++20 now (C++17 TS demo). This project would learn from
+Boost::asio do support `io_uring` and coroutine for C++20 now (C++17 TS demo). This project would learn from
 asio as well. There is no other reasons not using boost::asio.
 
 For now, this **libcoring** library would only be a (simple toy level when it's under development) new (using C++20 and
@@ -110,7 +110,7 @@ support
 
 Since the formatting would require two memory buffers, one for messages from front-end, one for formatted logs. This
 implementation doesn't use double buffer, instead it uses a simple on stack buffer, for simple application it should be
-enough. Alternatives like using mmap or io_uring_context (async io would use techs like DMA) would be taken into
+enough. Alternatives like using mmap or io_uring (async io would use techs like DMA) would be taken into
 consideration.
 
 The results only be better(equal in else cases) when the front-end is not busy logging and the log string is not very
