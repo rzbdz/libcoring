@@ -39,7 +39,7 @@ TEST(SkipListTest, TestAdd) {
   sk.add(12, 1);
   sk.add(13, 1);
   EXPECT_EQ(sk.size(), 20);
-  // sk.printKey();
+  //  sk.printKey();
   EXPECT_TRUE(sk.check_correctness());
 }
 
@@ -59,7 +59,7 @@ TEST(SkipListTest, TestPopLessEqSimple1) {
   sk.add(12, 1);
   sk.add(13, 1);
   //  LOG_DEBUG_RAW("print key 1");
-  // sk.printKey();
+  //  sk.printKey();
   EXPECT_EQ(sk.size(), 20);
   EXPECT_TRUE(sk.check_correctness());
   auto res = sk.pop_less_eq(9);
@@ -79,7 +79,7 @@ TEST(SkipListTest, TestPopLessEqSimple1) {
     }
   }
   //  LOG_DEBUG_RAW("print key 2");
-  // sk.printKey();
+  //  sk.printKey();
   EXPECT_TRUE(sk.check_correctness());
 }
 

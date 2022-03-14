@@ -55,7 +55,7 @@ class skiplist_map {
     // TODO: it waste a lot of memory... auto shrinking is needed.
     std::vector<_skiplist_node *> level_next_;
     _skiplist_node(KeyType key) : data_{key, ValueType{}}, level_next_(MAX_LEVEL) {
-      static_assert(std::is_trivially_constructible_v<ValueType>);
+      static_assert(std::is_default_constructible_v<ValueType>);
     }
     explicit _skiplist_node(std::pair<KeyType, ValueType> &&data, int size = MAX_LEVEL)
         : data_{std::move(data)}, level_next_(size) {}
@@ -88,6 +88,7 @@ class skiplist_map {
         }
       }
     }
+    std::cout << "\n\n";
     for (int i = max_level_ - 1; i >= 0; --i) {
       for (auto c : lines[i]) {
         std::cout << c;
@@ -142,8 +143,10 @@ class skiplist_map {
       cur = cur->level_next_[0];
       return skiplist_iterator{tmp};
     }
+    friend bool operator!=(skiplist_iterator lhs, skiplist_iterator rhs) { return lhs.cur != rhs.cur; }
     friend bool operator==(skiplist_iterator lhs, skiplist_iterator rhs) { return lhs.cur == rhs.cur; }
-    const std::pair<KeyType, ValueType> &operator->() { return cur->level_next_[0]->data_; }
+    const std::pair<KeyType, ValueType> &operator*() { return cur->level_next_[0]->data_; }
+    const std::pair<KeyType, ValueType> *operator->() { return &cur->level_next_[0]->data_; }
     auto key() { return cur->level_next_[0]->data_.first; }
     auto value() { return cur->level_next_[0]->data_.second; }
   };
@@ -249,7 +252,7 @@ class skiplist_map {
     _skiplist_node *prev = _find_lower_bound_prevs(target)[0];
     return prev->level_next_[0] && prev->level_next_[0]->data.first == target;
   }
-  skiplist_iterator begin() { return {head_.level_next_[0]}; }
+  skiplist_iterator begin() { return {&head_}; }
   skiplist_iterator end() { return {tail_}; }
 
  private:
@@ -321,29 +324,29 @@ class skiplist_map {
     if (!prevs[0]->level_next_[0] || prevs[0]->level_next_[0]->data_.first != key) return false;
     _skiplist_node *del = prevs[0]->level_next_[0];
     // from prev->cur->next to prev->next
-    for (int i = 0; i < max_level_; i++) {
+    for (int i = 0; i < del->level_next_.size(); i++) {
       // TODO: Is there a way to know how many level the node to be deleted have?
-      // So that we can reduce if branch, I think we can just add a field...
-      // But the trade-off have to be benchmarked.
-
-      if (prevs[i]->level_next_[i] == del) prevs[i]->level_next_[i] = del->level_next_[i];
+      // if (prevs[i]->level_next_[i] == del)
+      prevs[i]->level_next_[i] = del->level_next_[i];
     }
     delete del;
     // update max_level_.
-    // TODO:  Is there a way to know who have the max_level ? but more memory consumption
     // I think we can use a counter array to do that.
-    while (max_level_ > 1 && !head_.level_next_[max_level_ - 1]) max_level_--;
+    while (max_level_ > 1 && head_.level_next_[max_level_ - 1] == tail_) max_level_--;
     // if there is backward point, need to set cur.next.back to cur.back
     --length_;
     return true;
   }
+
   template <typename FKeyType>
   std::vector<ValueType> pop_less_eq(FKeyType &&key) {
     std::vector<ValueType> res;
+    // LOG_DEBUG_RAW("begin to pop check");
+    // printKey();
     auto prevs = _find_upper_bound_prevs(std::forward<FKeyType>(key));
     // head......-> prevs[0] -> first bigger -> ... -> tail
     // if prev is not head, mean we got some nodes
-    if (prevs[0] == begin().cur) {
+    if (prevs[0] == &head_) {
       return res;
     }
     // now cut the prevs, make list like this:
@@ -361,18 +364,23 @@ class skiplist_map {
     //                 2 is prevs[2]
     // ----------------AFTER--------------------
     // nodes arranged like this:
-    // -----------------------| 1[]--------hi-x
-    // ---2[]d----------------| 1[]-----------x
-    // ---2[]---3[]d----------| 1[]--5[]------x
-    // ---2[]---3[]r-4[target]| 1[]--5[]-- lo-x
+    // ---not in max_level----| 1[]--------hi-x
+    // ---2[]d-prev2----------| 1[]-----------x
+    // ---2[]---3[]d prev1----| 1[]--5[upper]------x
+    // ---2[]---3[]r-4[ prev0]| 1[]--5[bound]-- lo-x
     // -------------------------------------------
     // this start could be the prevs, but must not the head_
+    //    LOG_DEBUG_RAW("before cur");
+    //    printKey();
     auto start = head_.level_next_[0];
     // link head to the rest of the list
-    for (int i = max_level_ - 1; i >= 0; --i) {
+    for (int i = 0; i < max_level_; ++i) {
       head_.level_next_[i] = prevs[i]->level_next_[i];
-      prevs[i]->level_next_[i] = nullptr;
+      if (prevs[i] != &head_) prevs[i]->level_next_[i] = nullptr;
     }
+    //    LOG_DEBUG_RAW("after cur");
+    //    printKey();
+
     // get results
     auto cur = start;
     for (; cur;) {
@@ -381,6 +389,7 @@ class skiplist_map {
     }
     // destroy
     suicide_recursive(start);
+    while (max_level_ > 1 && head_.level_next_[max_level_ - 1] == tail_) max_level_--;
     length_ -= res.size();
     return res;
   }
