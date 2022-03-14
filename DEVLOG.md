@@ -1,10 +1,34 @@
-libcoring is a C++ network library in Proactor pattern (@see: POSA2), and it is based on the new io_uring syscall of
-linux and coroutine in C++ 20. It's under development now, nothing is completed so far.
+libcoring is a C++ network library in Proactor pattern (@see: POSA2), and it is based on the new io_uring
+syscall of linux and coroutine in C++ 20. It's under development now, the progress could be viewed in Github project
+page.
+---
 
-Nothing of this library is completed so far, by the time when the first usable version is completed, this file would be
-updated.
+## Getting started
+
+### Directories:
+
+- utils: some utilities for other module or library user (e.g. threading, buffer).
+- logging (depend on utils): an async logging module, it performs formatting and disk writing for less latency .
+- async: supports for C++20 coroutine. (most of them are from [cppcoro](https://github.com/lewissbaker/cppcoro))
+- io (depend on async): io_uring_context and proactor (event loop) supports based on coroutine.
+- net (depend on io): supports for socket and tcp connection.
+- test: test for all modules using google test.
+
+### Techniques and Features:
+
+- logging: deferred formatting, and use a spsc lock-free queue per thread, detailed information is available
+  in [DEVLOG.md](./DEVLOG.md). The submit latency is less than 1us in wsl2, 0.5us on 1GHz 2GB ram machine. More regular
+  benchmarks would be done.
+- io_context: use io_uring interfaces, and support both polling (since the queue is lock-free and mmapped) and interrupt
+  mode (It doesn't mean IO_POLL or SQ Polling of io_uring, but they would be supported too).
+- timer: IORING_OP_TIMEOUT of io_uring create a hrtimer in the kernel just like timerfd would possibly do, I think just
+  like the old days, we still want a multiplexer and demux for it in the user space, I just use a skiplist, but multimap
+  would be preferred.
+- buffer: just make tcp bytes stream reading/writing more smooth.
 
 ---
+
+## Design
 
 ### Design Pattern
 
@@ -14,10 +38,10 @@ proactor pattern in libcoring tcp server (might not be the final version):
 The basic pattern of the libcoring is **Paroactor** (combined with **Asynchronous-Completion-Token** and
 **Acceptor-Connector**
 patterns as POSA2 stated), which is tightly cooperated with the asynchronous I/O operation interfaces provided by the
-O/S (**io_uring** in linux kernel 5.6 and after).
+O/S (**io_uring_context** in linux kernel 5.6 and after).
 
 The proactor entity is named `io_context` (just like the one in boost::asio). In current design, one io_context is
-linked to one io_uring submission queue, and also one thread (to avoid complicated synchronizing).
+linked to one io_uring_context submission queue, and also one thread (to avoid complicated synchronizing).
 
 The high level abstraction won't need explicit calls to `io_context` object to do threading (but the acceptor main
 loop (proactor) thread context is still required as Acceptor-Connector pattern works), everything about the connection
@@ -37,21 +61,25 @@ libraries in the past for linux doesn't have a good application interface while 
 the **I/O Completion Port** interface in usability and performance together with **await/async** coroutine (Task)
 concept in C#.
 
-However, with the new `io_uring` interfaces introduced in linux kernel 5 and the new compiler level implementation of
-coroutine in C++20, things begin will change.
+However, with the new `io_uring_context` interfaces introduced in linux kernel 5 and the new compiler level
+implementation of coroutine in C++20, things begin will change.
 
 ### Boost::asio
 
-Boost::asio do support `io_uring` and coroutine for C++20 now (C++17 TS demo). This project would learn from asio as
-well. There is no other reasons not using boost::asio.
+Boost::asio do support `io_uring_context` and coroutine for C++20 now (C++17 TS demo). This project would learn from
+asio as well. There is no other reasons not using boost::asio.
 
 For now, this **libcoring** library would only be a (simple toy level when it's under development) new (using C++20 and
 linux kernel 5.6 api) and lightweight linux-only project, who need not deal with old version compatibility problem and
 platform differences.
 
+News shows that I/O Ring api of Windows resemble io_uring is introduced to Windows insider channel. (related
+posts: [ref1](https://windows-internals.com/i-o-rings-when-one-i-o-operation-is-not-enough/)
+, [ref2](https://windows-internals.com/ioring-vs-io_uring-a-comparison-of-windows-and-linux-implementations/))
+
 ---
 
-### Logging module
+## Logging module
 
 The logging module of libcoring use [fmtlib](https://github.com/fmtlib/fmt)
 as front end. But both formatting job and persistence happens in background thread. By default, the
@@ -61,12 +89,12 @@ high throughput, when both wanted, only binary logging would be qualified, toget
 and decode the logs (which means formatting offline).
 
 To reduce the overhead of lock contention when different thread submitting simultaneously, it maintains a
-**single-producer-single-consumer** lock-free queue per thread. The SPSC queue is simpler modeled after the C
-implementation in Intel DPDK [libring](https://github.com/DPDK/dpdk/tree/main/lib/ring) in C++ class.
+**as_logger_single-producer-as_logger_single-consumer** lock-free queue per thread. The SPSC queue is simpler modeled
+after the C implementation in Intel DPDK [libring](https://github.com/DPDK/dpdk/tree/main/lib/ring) in C++ class.
 
-The timestamp of every log message uses `std::chrono::system_clock::now()` directly, which lead to a high portion of
+The log_timestamp of every log message uses `std::chrono::system_clock::now()` directly, which lead to a high portion of
 latency when other low latency logging system would use CPU ticks (like `rdtsc` instruction) and estimate time (
-nanoseconds) on the fly, for simplicity I didn't use one, but the timestamp acquiring would occupy 50% ~ 90% of the
+nanoseconds) on the fly, for simplicity I didn't use one, but the log_timestamp acquiring would occupy 50% ~ 90% of the
 total submitting latency. Thus, this implementation would be not that useful when the logging argument is not so complex
 for the bottleneck is elsewhere.
 
@@ -82,11 +110,30 @@ support
 
 Since the formatting would require two memory buffers, one for messages from front-end, one for formatted logs. This
 implementation doesn't use double buffer, instead it uses a simple on stack buffer, for simple application it should be
-enough. Alternatives like using mmap or io_uring (async io would use techs like DMA) would be taken into consideration.
+enough. Alternatives like using mmap or io_uring_context (async io would use techs like DMA) would be taken into
+consideration.
 
 The results only be better(equal in else cases) when the front-end is not busy logging and the log string is not very
 simple (for example:
 multiple digits combined with string formatting), the latency of front end is stable (**2X faster** than
 **spdlog** while logging complex message).
 
+---
 
+## io_context
+
+...
+
+---
+
+## Notice:
+
+... From now on, I won't update the DEVLOG.md file on the fly.
+
+The project is still under development, and README.md would be updated as soon as new information is available. Beyond
+DEVLOG.md and REAME.md, other useful descriptions of how the codes are organized and designed are available in the
+**commit log** before and future. I might update a description of how the timer is designed in the future. I have also
+written some posts in Chinese to show the points that are needed to write such a 'toy' (but I won't keep it as only a
+toy) project, and I might translate them into English later to improve my English writing skill later.
+
+---
