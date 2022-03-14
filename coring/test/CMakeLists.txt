@@ -6,7 +6,7 @@
 
 # UIO
 add_executable(io_context_test io_context_test.cpp)
-target_link_libraries(io_context_test uring gtest gtest_main coring_utils)
+target_link_libraries(io_context_test uring gtest gtest_main coring_utils fmt)
 
 # LOGGER
 add_executable(async_log_test async_logger_test.cpp)
@@ -21,4 +21,5 @@ target_link_libraries(tcp_server_raw uring coring_utils)
 # skiplist_map
 add_executable(skiplist_test skiplist_test.cpp)
 target_link_libraries(skiplist_test logging gtest gtest_main)
+
 enable_testing()

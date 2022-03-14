@@ -27,10 +27,15 @@
 #include "coring/async/task.hpp"
 #include "coring/async/when_all.hpp"
 #include "coring/async/async_scope.hpp"
-#include "coring/async/io_awaitable.hpp"
+
+#include "io_awaitable.hpp"
+#include "timer.hpp"
+#include "coring/async/single_consumer_async_auto_reset_event.hpp"
 
 namespace coring {
 namespace detail {
+constexpr uint64_t EV_BIG_VALUE = 0x1fffffffffffffff;
+constexpr uint64_t EV_SMALL_VALUE = 0x1;
 // This class is adopted from project liburing4cpp (MIT license).
 // It encapsulates most of liburing interfaces within a RAII class.
 // I just add some methods.
@@ -83,7 +88,7 @@ class io_uring_context : noncopyable {
    * If need to close a socket/file, please make sure you use the IORING_OP_CLOSE with io_uring
    * for revoking all previous posts.
    * @see: https://patchwork.kernel.org/project/linux-fsdevel/patch/20191213183632.19441-9-axboe@kernel.dk/
-   * ---------
+   * ---------Linux manual:------
    * Attempt to cancel an already issued request.  addr must contain the user_data field of the request that
    * should be cancelled. The cancellation request will complete with one of the following results codes. If
    * found, the res field of the cqe will contain 0. If not found, res will contain -ENOENT.  If  found  and
@@ -535,8 +540,8 @@ class io_context : public coring::detail::io_uring_context {
 
  private:
   typedef coring::task<> my_task_t;
-  static constexpr uint64_t EV_STOP_MSG = 0x1fffffffffffffff;
-  static constexpr uint64_t EV_WAKEUP_MSG = 0x1;
+  static constexpr uint64_t EV_STOP_MSG = detail::EV_BIG_VALUE;
+  static constexpr uint64_t EV_WAKEUP_MSG = detail::EV_SMALL_VALUE;
 
   /// this coroutine should start (and be suspended) at io_context start
   coring::async_run init_eventfd() {
@@ -551,6 +556,16 @@ class io_context : public coring::detail::io_uring_context {
       if (msg >= EV_STOP_MSG) {
         stopped_ = true;
       }
+    }
+  }
+  async_run init_timeout_callback() {
+    while (!stopped_) {
+      while (timer_.has_more_timeouts()) {
+        auto tmp = timer_.get_next_expiration();
+        co_await timeout(&tmp);
+        timer_.handle_events();
+      }
+      co_await timer_event_;
     }
   }
 
@@ -652,6 +667,20 @@ class io_context : public coring::detail::io_uring_context {
     std::lock_guard lk(mutex_);
     todo_list_.emplace_back(std::forward<AWAITABLE>(awaitable));
   }
+  /// set timeout
+  /// \tparam AWAITABLE
+  /// \param awaitable
+  template <typename AWAITABLE, typename Duration>
+  void run_after(AWAITABLE &&awaitable, Duration &&duration) {}
+
+ public:
+  // on the same thread...
+  void register_timeout(std::coroutine_handle<> cont, std::chrono::microseconds exp) {
+    // TODO: if no this wrapper, the async_run would be exposed to user.
+    // Actually this two argument is all POD...no move required.
+    timer_.add_event(cont, exp);
+    timer_event_.set();
+  }
 
   void wakeup() { notify(EV_WAKEUP_MSG); }
 
@@ -703,6 +732,7 @@ class io_context : public coring::detail::io_uring_context {
     init_eventfd();
     // do scheduled tasks
     do_todo_list();
+    init_timeout_callback();
     while (!stopped_) {
       // the coroutine would be resumed inside io_token.resolve() method
       // blocking syscall. Call io_uring_submit_and_wait.
@@ -737,6 +767,8 @@ class io_context : public coring::detail::io_uring_context {
   // for cancelling
   std::vector<io_cancel_token> to_cancel_list_{};
   coring::async_scope my_scope_{};
+  coring::timer timer_{};
+  coring::single_consumer_async_auto_reset_event timer_event_;
 };
 }  // namespace coring
 

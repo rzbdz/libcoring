@@ -21,6 +21,7 @@ struct io_token {
     this->result = result;
     continuation.resume();
   }
+
  private:
   std::coroutine_handle<> continuation;
   int result = 0;
