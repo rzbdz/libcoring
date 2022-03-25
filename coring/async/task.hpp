@@ -51,7 +51,7 @@ class task_promise_base {
 template <typename T>
 class task_promise final : public task_promise_base {
  public:
-  task_promise() noexcept = default;
+  task_promise() noexcept {};
 
   ~task_promise() {
     switch (m_resultType) {
@@ -87,6 +87,23 @@ class task_promise final : public task_promise_base {
     assert(m_resultType == result_type::value);
 
     return m_value;
+  }
+  // HACK: Need to have co_await of task<int> return prvalue rather than
+  // rvalue-reference to work around an issue with MSVC where returning
+  // rvalue reference of a fundamental type from await_resume() will
+  // cause the value to be copied to a temporary. This breaks the
+  // sync_wait() implementation.
+  // See https://github.com/lewissbaker/cppcoro/issues/40#issuecomment-326864107
+  using rvalue_type = std::conditional_t<std::is_arithmetic_v<T> || std::is_pointer_v<T>, T, T &&>;
+
+  rvalue_type result() && {
+    if (m_resultType == result_type::exception) {
+      std::rethrow_exception(m_exception);
+    }
+
+    assert(m_resultType == result_type::value);
+
+    return std::move(m_value);
   }
 
  private:

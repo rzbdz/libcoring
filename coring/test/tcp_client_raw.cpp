@@ -15,7 +15,7 @@ namespace client1 {
 task<> reader(int fd, const std::stop_token &t) {
   int bytes_read = 0;
   auto ctx = coring::coro::get_io_context();
-  auto exec = ctx->as_executor();
+  [[maybe_unused]] auto exec = ctx->as_executor();
   for (int i = 0; !t.stop_requested();) {
     char buf[8193];
     bytes_read = co_await ctx->read(fd, buf, 8192, 0);
@@ -24,6 +24,14 @@ task<> reader(int fd, const std::stop_token &t) {
     buf[bytes_read] = 0;
     std::cout << "data:\n" << buf << std::endl;
   }
+}
+task<> connect_and_handle(io_context *ctx, int fd, const std::stop_token &t) {
+  net::endpoint servaddr("127.0.0.1", 1025);
+  if (co_await ctx->connect(fd, (sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+    assert_eq(3, 4);
+    abort();
+  }
+  ctx->schedule(reader(fd, t));
 }
 /// You need a server sending specific bytes data to client
 /// I suggest use python, the code I used are listed below:
@@ -48,25 +56,13 @@ task<> reader(int fd, const std::stop_token &t) {
 void run_client() {
   io_context ctx;
   int fd;
-  struct sockaddr_in servaddr {};
   fd = ::socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
     abort();
   }
-  bzero(&servaddr, sizeof(servaddr));
-  servaddr.sin_family = AF_INET;
-  servaddr.sin_port = htons(1025);
-  if (::inet_pton(AF_INET, "127.0.0.1", &servaddr.sin_addr) <= 0) {
-    assert_eq(1, 2);
-    abort();
-  }
-  if (connect(fd, (sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
-    assert_eq(3, 4);
-    abort();
-  }
   std::stop_source src{};
-  ctx.schedule(reader(fd, src.get_token()));
   // this simulates the signal stop, which will be supported in the future.
+  ctx.schedule(connect_and_handle(&ctx, fd, src.get_token()));
   std::jthread jt([&ctx, &src] {
     sleep(5);
     src.request_stop();
