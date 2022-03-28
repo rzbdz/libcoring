@@ -28,6 +28,18 @@ async_logger::async_logger(std::string file_name, off_t roll_size, int flush_int
   logger::register_submitter(async_submitter);
 }
 
+void async_logger::append(std::function<void(output_iterator_t)> &&f, log_entry &e) {
+  if (__glibc_unlikely(local_log_ring_ptr == nullptr)) {
+    std::lock_guard lk(mutex_);
+    local_log_ring_ptr = std::make_shared<ring_t>(ring_buffer_size);
+    log_rings_.emplace_back(local_log_ring_ptr);
+    signal();
+  }
+  local_log_ring_ptr->emplace_back(std::move(f), e);
+  // wake up consumer. (if needed)
+  cond_.notify_one();
+}
+
 void async_logger::poll() {
   std::vector<log_ring_entry_t> backlogs;
   size_t rings_size = 0;
@@ -70,6 +82,38 @@ void async_logger::poll() {
     force_flush_ = false;
   }
 }
+
+void async_logger::logging_loop() {
+  count_down_latch_.count_down();
+  while (!stop_source_.stop_requested()) {
+    poll();
+    std::unique_lock lk(mutex_);
+    cond_.wait_for(lk, std::chrono::seconds(flush_interval_));
+  }
+  // At this time, the thread should be stop_requested,
+  // Thus, the variable should be safe if nobody stupidly
+  // call stop again.
+  force_flush_ = true;
+  poll();
+  output_file_.force_flush();
+}
+
+void async_logger::stop() {
+  stop_source_.request_stop();
+  {
+    std::lock_guard lk(mutex_);
+    force_flush_ = true;
+  }
+  cond_.notify_all();
+  // this is stupid because jthread member is
+  // sometime destruct after writing_buffer(impl defined),
+  // and no solution unless put jthread
+  // to main thread to have a better lifetime.
+  if (thread_.joinable()) {
+    thread_.join();
+  }
+}
+
 async_logger::~async_logger() {
   stop();
   output_file_.force_flush();

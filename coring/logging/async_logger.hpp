@@ -56,17 +56,7 @@ class async_logger : noncopyable {
   ~async_logger();
 
  public:
-  void append(std::function<void(output_iterator_t)> &&f, detail::log_entry &e) {
-    if (__glibc_unlikely(local_log_ring_ptr == nullptr)) {
-      std::lock_guard lk(mutex_);
-      local_log_ring_ptr = std::make_shared<ring_t>(ring_buffer_size);
-      log_rings_.emplace_back(local_log_ring_ptr);
-      signal();
-    }
-    local_log_ring_ptr->emplace_back(std::move(f), e);
-    // wake up consumer. (if needed)
-    cond_.notify_one();
-  }
+  void append(std::function<void(output_iterator_t)> &&f, detail::log_entry &e);
 
   void run() {
     if (__glibc_unlikely(thread_.joinable())) {
@@ -78,30 +68,9 @@ class async_logger : noncopyable {
   }
 
   void poll();
-  void logging_loop() {
-    count_down_latch_.count_down();
-    while (!stop_source_.stop_requested()) {
-      poll();
-      std::unique_lock lk(mutex_);
-      cond_.wait_for(lk, std::chrono::seconds(flush_interval_));
-    }
-    force_flush_ = true;
-    poll();
-    output_file_.force_flush();
-  }
+  void logging_loop();
 
-  void stop() {
-    stop_source_.request_stop();
-    force_flush_ = true;
-    cond_.notify_all();
-    // this is stupid because jthread member is
-    // sometime destruct after writing_buffer(impl defined),
-    // and no solution unless put jthread
-    // to main thread to have a better lifetime.
-    if (thread_.joinable()) {
-      thread_.join();
-    }
-  }
+  void stop();
 
   void signal() { signal_ = true; }
 

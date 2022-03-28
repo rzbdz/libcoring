@@ -33,7 +33,7 @@ class endpoint {
   static constexpr socklen_t len = sizeof(sockaddr_in);
   explicit endpoint(uint16_t port = 0) noexcept
       : addr4_{.sin_family = AF_INET, .sin_port = net::host_to_network(port)} {}
-  explicit endpoint(const std::string &ip, uint16_t port) {
+  endpoint(const std::string &ip, uint16_t port) {
     addr4_.sin_family = AF_INET;
     addr4_.sin_port = net::host_to_network(port);
     if (::inet_pton(AF_INET, ip.c_str(), &addr4_.sin_addr) <= 0) {
@@ -56,32 +56,8 @@ class endpoint {
   // For MT-Safe gethostbyname_r
   static thread_local char local_resolve_buffer[64 * 1024];
 
-  static bool resolve(const std::string &hostname, endpoint *out) {
-    struct hostent hent {};
-    struct hostent *he = nullptr;
-    int herrno = 0;
-    ::memset(&hent, 0, sizeof(hent));
-    // signal safe
-    int ret =
-        gethostbyname_r(hostname.c_str(), &hent, local_resolve_buffer, sizeof(local_resolve_buffer), &he, &herrno);
-    if (ret == 0 && he != nullptr) {
-      assert(he->h_addrtype == AF_INET && he->h_length == sizeof(uint32_t));
-      // TODO: it will return multiple ip address, if one fails, we should retry others.
-      // A solution is to copy the resolve buffer (it depends on how many we got)
-      out->addr4_.sin_addr = *reinterpret_cast<struct in_addr *>(he->h_addr);
-      return true;
-    } else {
-      // TODO: check herrno
-      return false;
-    }
-  }
-  static endpoint from_resolve(const std::string &hostname) {
-    endpoint res{};
-    if (!resolve(hostname, &res)) {
-      // TODO: error handling...
-    }
-    return res;
-  }
+  static bool resolve(const std::string &hostname, endpoint *out);
+  static endpoint from_resolve(const std::string &hostname);
   [[nodiscard]] sa_family_t family() const { return addr4_.sin_family; }
   [[nodiscard]] uint64_t port() const { return addr4_.sin_port; }
   auto as_sockaddr() { return detail::sockaddr_cast(&addr4_); }

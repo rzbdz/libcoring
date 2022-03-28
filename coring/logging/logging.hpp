@@ -23,10 +23,10 @@ enum log_level {
   LOG_LEVEL_CNT,
 };
 // bugs when use constexpr!
-constexpr log_level LOG_LEVEL = INFO;
+constexpr log_level LOG_LEVEL = DEBUG;
 
 constexpr bool SHOULD_EMIT(const log_level exp) {
-  if (exp <= LOG_LEVEL) {
+  if (exp >= LOG_LEVEL) {
     return true;
   } else {
     return false;

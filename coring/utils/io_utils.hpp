@@ -50,24 +50,7 @@ struct on_scope_exit {
  * @throw std::runtime_error / std::system_error
  * @return never
  */
-[[noreturn]] void panic(std::string_view sv, int err) {
-#ifndef NDEBUG
-  // https://stackoverflow.com/questions/77005/how-to-automatically-generate-a-stacktrace-when-my-program-crashes
-  void *array[32];
-  size_t size;
-
-  // get void*'s for all entries on the stack
-  size = backtrace(array, 32);
-
-  // print out all the frames to stderr
-  fprintf(stderr, "Error: errno %d:\n", err);
-  backtrace_symbols_fd(array, size, STDERR_FILENO);
-
-  // __asm__("int $3");
-#endif
-
-  throw std::system_error(err, std::generic_category(), sv.data());
-}
+[[noreturn]] void panic(std::string_view sv, int err);
 
 struct panic_on_err {
   panic_on_err(std::string_view _command, bool _use_errno) : command(_command), use_errno(_use_errno) {}
