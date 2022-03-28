@@ -78,7 +78,45 @@ class io_uring_context : noncopyable {
     io_uring_cq_advance(&ring, cqe_count);
     cqe_count = 0;
   }
-
+  /**
+   * Link a timeout to a async operation
+   * timeout_flagsmay contain IORING_TIMEOUT_ABSfor an absolute timeout value, or 0 for a relative timeout
+   * @param ts
+   * @param flags
+   * @param iflags
+   */
+  void link_timeout(struct __kernel_timespec *ts, unsigned flags = 0, uint8_t iflags = IOSQE_IO_LINK) {
+    auto *sqe = io_uring_get_sqe_safe();
+    io_uring_prep_link_timeout(sqe, ts, flags);
+    io_uring_sqe_set_flags(sqe, iflags);
+    io_uring_sqe_set_data(sqe, nullptr);
+    sqe = io_uring_get_sqe_safe();
+    // sign a tail
+    io_uring_prep_nop(sqe);
+    io_uring_sqe_set_flags(sqe, 0);
+    io_uring_sqe_set_data(sqe, nullptr);
+  }
+  /**
+   * A helper method
+   * Link a timeout to a async operation
+   * timeout_flagsmay contain IORING_TIMEOUT_ABSfor an absolute timeout value, or 0 for a relative timeout
+   * @param ts
+   * @param flags
+   * @param iflags
+   */
+  io_awaitable link_timeout(io_awaitable &&async_op, struct __kernel_timespec *ts, unsigned flags = 0,
+                            uint8_t iflags = IOSQE_IO_LINK) {
+    auto *sqe = io_uring_get_sqe_safe();
+    io_uring_prep_link_timeout(sqe, ts, flags);
+    io_uring_sqe_set_flags(sqe, iflags);
+    io_uring_sqe_set_data(sqe, nullptr);
+    sqe = io_uring_get_sqe_safe();
+    // sign a tail
+    io_uring_prep_nop(sqe);
+    io_uring_sqe_set_flags(sqe, 0);
+    io_uring_sqe_set_data(sqe, nullptr);
+    return async_op;
+  }
   /**
    * Cancel a request
    * TODO: I won't deal with cancellation now...(0)
@@ -169,7 +207,7 @@ class io_uring_context : noncopyable {
   }
 
   /** Write data into a fixed buffer asynchronously
-   * @see pwritev2(2)
+   * @see pwritev2(2)y
    * @see io_uring_enter(2) IORING_OP_WRITE_FIXED
    * @param buf_index the index of buffer registered with register_buffers
    * @param iflags IOSQE_* flags
@@ -284,7 +322,7 @@ class io_uring_context : noncopyable {
     return make_awaitable(sqe, iflags);
   }
 
-  /** Accept a connection on a socket asynchronously
+  /** Accept a connection_base on a socket asynchronously
    * @see accept4(2)
    * @see io_uring_enter(2) IORING_OP_ACCEPT
    * @param iflags IOSQE_* flags
@@ -296,7 +334,7 @@ class io_uring_context : noncopyable {
     return make_awaitable(sqe, iflags);
   }
 
-  /** Initiate a connection on a socket asynchronously
+  /** Initiate a connection_base on a socket asynchronously
    * @see connect(2)
    * @see io_uring_enter(2) IORING_OP_CONNECT
    * @param iflags IOSQE_* flags
@@ -309,6 +347,7 @@ class io_uring_context : noncopyable {
   }
 
   /** Wait for specified duration asynchronously
+   * timeout_flagsmay contain IORING_TIMEOUT_ABS for an absolute timeout value, or 0 for a relative timeout
    * @see io_uring_enter(2) IORING_OP_TIMEOUT
    * @param ts initial expiration, timespec
    * @param iflags IOSQE_* flags
@@ -382,7 +421,7 @@ class io_uring_context : noncopyable {
     return make_awaitable(sqe, iflags);
   }
 
-  /** Shut down part of a full-duplex connection asynchronously
+  /** Shut down part of a full-duplex connection_base asynchronously
    * @see shutdown(2)
    * @see io_uring_enter(2) IORING_OP_SHUTDOWN
    * @param iflags IOSQE_* flags
@@ -772,14 +811,23 @@ class io_context : public coring::detail::io_uring_context {
 };
 }  // namespace coring
 
-namespace coring::coro {
-auto get_io_context() {
-  auto ptr = reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0));
-  if (ptr == nullptr) {
-    throw std::runtime_error{"no io_context bind"};
+namespace coring {
+struct coro {
+  static auto get_io_context() {
+    auto ptr = reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0));
+    if (ptr == nullptr) {
+      throw std::runtime_error{"no io_context bind"};
+    }
+    return ptr;
   }
-  return ptr;
-}
-}  // namespace coring::coro
+  static io_context &get_io_context_ref() {
+    auto ptr = reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0));
+    if (ptr == nullptr) {
+      throw std::runtime_error{"no io_context bind"};
+    }
+    return *ptr;
+  }
+};
+}  // namespace coring
 
 #endif  // CORING_IO_CONTEXT_HPP

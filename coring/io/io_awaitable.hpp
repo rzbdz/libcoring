@@ -17,8 +17,10 @@ struct io_token {
   friend struct io_awaitable;
 
   // result is a int value (same as system call)
-  void resolve(int result) noexcept {
-    this->result = result;
+  // https://github.com/axboe/liburing/issues/6
+  // IO operations are clamped at 2G in Linux
+  void resolve(int res) noexcept {
+    this->result = res;
     continuation.resume();
   }
 
