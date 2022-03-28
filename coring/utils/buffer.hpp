@@ -18,6 +18,7 @@ namespace coring {
 class buffer {
  protected:
   static constexpr size_t default_size = 128;
+  constexpr static const char kCRLF[] = "\r\n";
 
  public:
   explicit buffer(size_t init_size = default_size) : data_(default_size) {}
@@ -60,12 +61,13 @@ class buffer {
     LDR("now:");
     LOG_B();
   }
-  char *back() {
+  const char *back() const {
     LDR("back, dangerous, %lu", index_write_);
-    return (data_.data() + index_write_);
+    return data_.data() + index_write_;
   }
+  char *back() { return data_.data() + index_write_; }
 
-  char *back(size_t want) {
+  const char *back(size_t want) {
     if (want > writable()) {
       make_room(want);
     }
@@ -74,7 +76,7 @@ class buffer {
 
   void push_back(const void *src, size_t len) {
     LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
-    char *dst = back(len);
+    char *dst = const_cast<char *>(back(len));
     LDR("back: 0x%lx", (size_t)dst);
     ::memcpy(dst, src, len);
     LDR("after copy, first byte in dst: %d", (int)(*dst));
@@ -105,6 +107,26 @@ class buffer {
     size_t len = str.size();
     LDR("push back a string: %s, %lu", str.data(), len);
     push_back(str.data(), len);
+  }
+
+  const char *find_crlf() const {
+    const char *crlf = std::search(front(), back(), kCRLF, kCRLF + 2);
+    return crlf == back() ? nullptr : crlf;
+  }
+
+  const char *find_crlf(const char *start) const {
+    const char *crlf = std::search(start, back(), kCRLF, kCRLF + 2);
+    return crlf == back() ? nullptr : crlf;
+  }
+
+  const char *find_eol() const {
+    const void *eol = memchr(front(), '\n', readable());
+    return static_cast<const char *>(eol);
+  }
+
+  const char *findEOL(const char *start) const {
+    const void *eol = memchr(start, '\n', back() - start);
+    return static_cast<const char *>(eol);
   }
 
   void make_room(size_t want) {
