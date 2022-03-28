@@ -322,7 +322,7 @@ class io_uring_context : noncopyable {
     return make_awaitable(sqe, iflags);
   }
 
-  /** Accept a connection_base on a socket asynchronously
+  /** Accept a connection on a socket asynchronously
    * @see accept4(2)
    * @see io_uring_enter(2) IORING_OP_ACCEPT
    * @param iflags IOSQE_* flags
@@ -334,7 +334,7 @@ class io_uring_context : noncopyable {
     return make_awaitable(sqe, iflags);
   }
 
-  /** Initiate a connection_base on a socket asynchronously
+  /** Initiate a connection on a socket asynchronously
    * @see connect(2)
    * @see io_uring_enter(2) IORING_OP_CONNECT
    * @param iflags IOSQE_* flags
@@ -421,7 +421,7 @@ class io_uring_context : noncopyable {
     return make_awaitable(sqe, iflags);
   }
 
-  /** Shut down part of a full-duplex connection_base asynchronously
+  /** Shut down part of a full-duplex connection asynchronously
    * @see shutdown(2)
    * @see io_uring_enter(2) IORING_OP_SHUTDOWN
    * @param iflags IOSQE_* flags
