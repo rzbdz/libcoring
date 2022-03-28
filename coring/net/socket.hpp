@@ -3,114 +3,64 @@
 #define CORING_SOCKET_HPP
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
 
 #include "coring/utils/buffer.hpp"
 #include "endpoint.hpp"
+#include "coring/utils/file_descriptor.hpp"
 namespace coring {
 class socket {
+ protected:
  public:
-  socket() {}
+  socket(int fd = -1) : fd_{fd} {}
+  int fd() { return fd_; }
+  void set_fd(int fd) { fd_ = fd; }
+  operator file_descriptor() { return {fd_}; }  // NOLINT
+  int error();
+  std::error_code error_code() { return {error(), std::system_category()}; }
+  net::endpoint local_endpoint();
+  net::endpoint peer_endpoint();
 
-  int error() {
-    int optval;
-    socklen_t optlen = static_cast<socklen_t>(sizeof optval);
-    if (::getsockopt(fd_, SOL_SOCKET, SO_ERROR, &optval, &optlen) < 0) {
-      return errno;
-    } else {
-      return optval;
-    }
+  bool is_self_connect();
+  void setsockopt(int level, int optname, const void *optval, socklen_t optlen);
+  /// set the linger option
+  /// If your process call close(), FIN would be sent from the closing side by default
+  /// note: you can call enable_elegant_quit to set socket option SO_LINGER to make it send RST instead of FIN
+  /// If your process exit without closing the socket, kernel would close the tcp connection and
+  /// do the clean up for your process. FIN or RST can be sent.
+  /// If there is data in your receive queue, RST would be sent. Otherwise, FIN would be sent.
+  /// Go through tcp_close() in tcp.c for more details.
+  ///------------------------------------------------------------------------------------------------------------
+  /// <p>--- onoff = 0 => close won't block, RST sent if recv queue is not empty (which means you didn't handle all
+  /// request, bad story), FIN sent if recv queue is empty, a good ending.</p>
+  /// <p>--- linger = 0 => send RST immediately. </p>
+  /// <p>--- linger !=0 => try to do case onoff = 0 if no timeout(linger seconds replaces tcp_fin_timeout) </p>
+  /// If enable this use default parameter, when you call close, it would block.
+  /// you should use io_context::close to close the socket.
+  void enable_elegant_quit(u_short onoff = 1, ushort linger = 1) {
+    struct linger tmp = {onoff, linger};
+    setsockopt(SOL_SOCKET, SO_LINGER, &tmp, sizeof(tmp));
   }
-
-  net::endpoint local_endpoint() {
-    net::endpoint ep{};
-    socklen_t addrlen = net::endpoint::len;
-    if (::getsockname(fd_, ep.as_sockaddr(), &addrlen) < 0) {
-      // TODO:  error handling, add a LOG_FATAL
-      // use error_code
-      throw std::runtime_error("bad socket local");
-    }
-    return ep;
-  }
-  net::endpoint peer_endpoint() {
-    net::endpoint ep{};
-    socklen_t addrlen = net::endpoint::len;
-    if (::getpeername(fd_, ep.as_sockaddr(), &addrlen) < 0) {
-      // TODO:  error handling, add a LOG_FATAL
-      // use error_code
-      throw std::runtime_error("bad socket peer");
-    }
-    return ep;
-  }
-
-  bool is_self_connect() {
-    auto local = local_endpoint();
-    auto peer = peer_endpoint();
-    if (local.family() == AF_INET) {
-      return local.port() == peer.port() &&
-             local.as_sockaddr_in()->sin_addr.s_addr == peer.as_sockaddr_in()->sin_addr.s_addr;
-    } else {
-      return false;
-    }
-  }
-  void setsockopt(int level, int optname, const void *optval, socklen_t optlen) {
-    if (::setsockopt(fd_, level, optname, optval, optlen) < 0) {
-      // I just know that the errno could use error_code
-      // TODO:  error handling, add a LOG_FATAL
-      throw std::system_error(std::error_code{errno, std::system_category()});
-    }
-  }
-
-  void shutdown(int how) {
-    if (::shutdown(fd_, how) < 0) {
-      // TODO:  error handling, add a LOG_FATAL
-      throw std::system_error(std::error_code{errno, std::system_category()});
-    }
-  }
+  void shutdown(int how);
 
   void shutdown() { shutdown(SHUT_RDWR); }
   void shutdown_write() { shutdown(SHUT_WR); }
   void shutdown_read() { shutdown(SHUT_RD); }
 
-  void set_tcp_no_delay(bool on) {
-    int optval = on ? 1 : 0;
-    int ret = ::setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &optval, static_cast<socklen_t>(sizeof optval));
-    if (ret < 0 && on) {
-      // TODO:  error handling, add a LOG_FATAL
-      throw std::system_error(std::error_code{errno, std::system_category()});
-    }
-  }
+  void set_tcp_no_delay(bool on);
 
-  void set_reuse_addr(bool on) {
-    int optval = on ? 1 : 0;
-    int ret = ::setsockopt(fd_, SOL_SOCKET, SO_REUSEADDR, &optval, static_cast<socklen_t>(sizeof optval));
-    if (ret < 0 && on) {
-      // TODO:  error handling, add a LOG_FATAL
-      throw std::system_error(std::error_code{errno, std::system_category()});
-    }
-  }
+  void set_reuse_addr(bool on);
 
-  void set_reuse_port(bool on) {
-    int optval = on ? 1 : 0;
-    int ret = ::setsockopt(fd_, SOL_SOCKET, SO_REUSEPORT, &optval, static_cast<socklen_t>(sizeof optval));
-    if (ret < 0 && on) {
-      // TODO:  error handling, add a LOG_FATAL
-      throw std::system_error(std::error_code{errno, std::system_category()});
-    }
-  }
+  void set_reuse_port(bool on);
 
-  void set_keep_alive(bool on) {
-    int optval = on ? 1 : 0;
-    int ret = ::setsockopt(fd_, SOL_SOCKET, SO_KEEPALIVE, &optval, static_cast<socklen_t>(sizeof optval));
-    if (ret < 0 && on) {
-      // TODO:  error handling, add a LOG_FATAL
-      throw std::system_error(std::error_code{errno, std::system_category()});
-    }
-  }
+  void set_keep_alive(bool on);
 
- private:
-  int fd_;
+  void close() { ::close(fd_); }
+
+ protected:
+  int fd_{-1};
 };
 }  // namespace coring
 
