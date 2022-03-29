@@ -13,11 +13,13 @@ struct peer_endpoint {
   net::endpoint peer;
   explicit peer_endpoint(net::endpoint p) : peer{p} {}
   explicit peer_endpoint(socket s) : peer{s.peer_endpoint()} {}
+  peer_endpoint(net::endpoint l, net::endpoint p) : peer{p} {}
 };
 struct local_endpoint {
   net::endpoint local;
-  explicit local_endpoint(net::endpoint p) : local{p} {}
+  explicit local_endpoint(net::endpoint l) : local{l} {}
   explicit local_endpoint(socket s) : local{s.local_endpoint()} {}
+  local_endpoint(net::endpoint l, net::endpoint) : local{l} {}
 };
 struct socket_endpoints : local_endpoint, peer_endpoint {
   socket_endpoints(net::endpoint l, net::endpoint p) : local_endpoint{l}, peer_endpoint{p} {}
