@@ -725,17 +725,40 @@ class io_context : public coring::detail::io_uring_context {
   void wakeup() { notify(EV_WAKEUP_MSG); }
 
   void submit() { wakeup(); }
+
   /// Spawn a task on current event loop
   ///
   /// Since liburing is not thread-safe(especially with io_uring_get_sqe), we
   /// CANNOT spawn anything related to a io_context sqe manipulation outside of
   /// the context thread, usually new task would be spawned when the get_completion
   /// goes to.
+  ///
   /// But sometimes user may want to run a coroutine that have nothing to do
-  /// with io_uring_context. That should be considered.
+  /// with io_uring_context. This should be considered.
   ///
   /// And we can't afford to lock io_uring_get_sqe, that's unacceptable. If you are
   /// going to do that, it means the design of the program is bad.
+  ///
+  /// TODO: rewrite this for better performance in multi-threaded condition.
+  /// Right now this spawn is slow (benched), we should use multiple thread accepting concurrently.
+  /// avoiding this slow performance.
+  /// I think we should use a lock-free queue for the task queue,
+  /// during an interview, the interviewer asked me why I didn't use
+  /// lock-free queue for this kind of queues just like what I did in
+  /// the async logger....
+  /// But the problem I think is due to the 'single' restriction, which
+  /// means we need more thread_local memory leakage, so spsc for async
+  /// logger should not be used. Actually,
+  /// I think we can use mpsc wait-free queue to replace both async_logger
+  /// and the todolist queue of io_context. (of course the performance would
+  /// be weaker thanks to more CAS operations compared to spsc one,
+  /// but it is necessary).
+  /// I do have concern on the correctness on lock-free queue, so the queue
+  /// in the project is partially modeling the implementation in the intel
+  /// DPDK library. What I didn't fork is the multi-producer part of it,
+  /// we can take a leap on that.
+  /// in case you need it: https://doc.dpdk.org/guides/prog_guide/ring_lib.html
+  ///
   /// \tparam AWAITABLE basically task<>, or something else that could be awaited and returns void.
   /// \tparam thread_check if your task contains a io_uring_context related procedure, and the io_context you
   ///                      use may not running on the current thread

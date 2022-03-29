@@ -87,6 +87,14 @@ int main(int argc, char *argv[]) {
 // But I found that we don't want to sleep the main thread on here
 // Because this spawn is slow , we should use multiple thread accepting concurrently.
 // avoiding this slow performance.
+// I think we should use a lock-free queue for the task queue,
+// during an interview, the interviewer asked me why I didn't use
+// lock-free queue for this kind of queues just like what I did in
+// the async logger....
+// But the problem I think is due to the 'single' restriction, which
+// means we need more thread_local memory leakage, so spsc for async
+// logger should not be used. Actually,
+// I think we can use.............. the rest notes I just move to the spawn
 // -------------------------------------------------------------------------------
 //  auto tk = src.get_token();
 //  try {
