@@ -6,6 +6,8 @@
 #include "coring/async/task.hpp"
 #include "coring/io/io_context.hpp"
 namespace coring {
+/// This class is a wrapper supporting io_context
+/// for char vector based buffer. (just like a decorator)
 /// TODO: make the buffer registered with io_uring
 /// But the interfaces is not simple to design.
 class async_buffer : public buffer {
