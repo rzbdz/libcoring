@@ -56,7 +56,7 @@ void run_server() {
   // Just use stop_source + stop_token...
   io_cancel_token cancel;
   ctx.schedule(acceptor(fd, src, &cancel));
-  ctx.run_loop();
+  ctx.run();
 }
 }  // namespace server1
 int main() {

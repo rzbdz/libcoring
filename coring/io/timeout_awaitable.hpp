@@ -12,8 +12,8 @@ struct timeout_awaitable {
 
   void await_suspend(std::coroutine_handle<> continuation) noexcept {
     // TODO: user define io_context...
-    auto ioc = coro::get_io_context();
-    ioc->register_timeout(continuation, timeout);
+    auto &ioc = coro::get_io_context_ref();
+    ioc.register_timeout(continuation, timeout);
   }
 
   constexpr void await_resume() const noexcept {}

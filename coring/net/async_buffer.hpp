@@ -14,9 +14,13 @@ class async_buffer : public buffer {
 
  public:
   async_buffer(size_t init_size = buffer::default_size) : buffer(init_size) {}
+
   auto get_context() -> decltype(coro::get_io_context()) {
     if (__glibc_unlikely(context_cache_ == nullptr)) {
       context_cache_ = coro::get_io_context();
+    }
+    if (context_cache_ == nullptr) {
+      // TODO: Question, do we really need a context_cache here ?
     }
     return context_cache_;
   }

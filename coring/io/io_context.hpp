@@ -4,6 +4,8 @@
 #include <functional>
 #include <system_error>
 #include <chrono>
+#include <thread>
+#include <latch>
 #include <sys/poll.h>
 #include <sys/timerfd.h>
 #include <sys/stat.h>
@@ -596,6 +598,7 @@ class io_context : public coring::detail::io_uring_context {
         stopped_ = true;
       }
     }
+    coring::thread::set_key_data(nullptr, 0);
   }
   async_run init_timeout_callback() {
     while (!stopped_) {
@@ -678,8 +681,6 @@ class io_context : public coring::detail::io_uring_context {
       // https://isocpp.org/wiki/faq/exceptions#ctors-can-throw
       throw std::runtime_error("o/s fails to allocate more fd");
     }
-    // bind thread.
-    coring::thread::set_key_data(this, 0);
   }
 
   inline executor_t as_executor() { return this; }
@@ -739,7 +740,7 @@ class io_context : public coring::detail::io_uring_context {
   /// \tparam thread_check if your task contains a io_uring_context related procedure, and the io_context you
   ///                      use may not running on the current thread
   /// \param awaitable a task, must be void return such as task<>
-  template <typename AWAITABLE, bool thread_check = false,
+  template <bool thread_check = false, typename AWAITABLE,
             typename = std::enable_if_t<std::is_void_v<typename coring::awaitable_traits<AWAITABLE>::await_result_t>>>
   void inline spawn(AWAITABLE &&awaitable) {
     if constexpr (thread_check) {
@@ -762,11 +763,13 @@ class io_context : public coring::detail::io_uring_context {
     [a = this]() -> async_run { co_await a->my_scope_.join(); }();
   }
 
+ private:
   /// the best practice might be using a eventfd in io_uring_context
   /// or manage your timing event using a rb-tree timing wheel etc. to
   /// use IORING_OP_TIMEOUT like timerfd in epoll?
   /// more info: @see:https://kernel.dk/io_uring_context-whatsnew.pdf
-  void run() {
+  void do_run() {
+    // bind thread.
     stopped_ = false;
     init_eventfd();
     // do scheduled tasks
@@ -781,7 +784,17 @@ class io_context : public coring::detail::io_uring_context {
     // TODO: handle stop event, deal with async_scope (issue cancellations then call join)
   }
 
-  inline void run_loop() { run(); }
+ public:
+  void run() {
+    coring::thread::set_key_data(this, 0);
+    do_run();
+  }
+
+  void run(std::latch &cd) {
+    coring::thread::set_key_data(this, 0);
+    cd.count_down();
+    do_run();
+  }
 
   void stop() {
     // lazy stop
@@ -815,9 +828,7 @@ namespace coring {
 struct coro {
   static auto get_io_context() {
     auto ptr = reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0));
-    if (ptr == nullptr) {
-      throw std::runtime_error{"no io_context bind"};
-    }
+    // NO exception thrown, just make it support nullptr
     return ptr;
   }
   static io_context &get_io_context_ref() {
@@ -827,6 +838,9 @@ struct coro {
     }
     return *ptr;
   }
+  /// Just make sure you are in a coroutine before calling this,
+  /// it's not the same spawn as the one in boost::asio.
+  static void spawn(task<> &&t) { get_io_context_ref().schedule(std::move(t)); }
 };
 }  // namespace coring
 
