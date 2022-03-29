@@ -1,4 +1,3 @@
-
 #include "socket.hpp"
 int coring::socket::error() {
   int optval;
@@ -50,7 +49,10 @@ void coring::socket::setsockopt(int level, int optname, const void *optval, sock
 void coring::socket::shutdown(int how) {
   if (::shutdown(fd_, how) < 0) {
     // TODO:  error handling, add a LOG_FATAL
-    throw std::system_error(std::error_code{errno, std::system_category()});
+    // We don't care, but it will be closed finally.
+    // The point is that when the client shut it, we lose the game.
+    // throw std::system_error(std::error_code{errno, std::system_category()});
+    // std::cout << "Sad story the fd is not well-formed: " << fd_ << std::endl;
   }
 }
 void coring::socket::set_tcp_no_delay(bool on) {
