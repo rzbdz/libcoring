@@ -11,27 +11,30 @@ void coring::tcp::acceptor::create_new_fd(coring::net::endpoint addr) {
   }
 }
 coring::task<coring::tcp::connection> coring::tcp::acceptor::accept() {
+  auto &ctx = coro::get_io_context_ref();
   net::endpoint peer_addr{};
   auto addr_len = net::endpoint::len;
-  auto connfd = co_await ctx_cache_.accept(listenfd_, peer_addr.as_sockaddr(), &addr_len);
+  auto connfd = co_await ctx.accept(listenfd_, peer_addr.as_sockaddr(), &addr_len);
   if (connfd < 0) {
     throw std::system_error(std::error_code{errno, std::system_category()});
   }
   co_return tcp::connection{socket{connfd}};
 }
 coring::task<coring::tcp::peer_connection> coring::tcp::acceptor::accept_with_peer() {
+  auto &ctx = coro::get_io_context_ref();
   net::endpoint peer_addr{};
   auto addr_len = net::endpoint::len;
-  auto connfd = co_await ctx_cache_.accept(listenfd_, peer_addr.as_sockaddr(), &addr_len);
+  auto connfd = co_await ctx.accept(listenfd_, peer_addr.as_sockaddr(), &addr_len);
   if (connfd < 0) {
     throw std::system_error(std::error_code{errno, std::system_category()});
   }
   co_return tcp::peer_connection{socket{connfd}, peer_addr};
 }
 coring::task<coring::tcp::socket_connection> coring::tcp::acceptor::accept_with_socket() {
+  auto &ctx = coro::get_io_context_ref();
   net::endpoint peer_addr{};
   auto addr_len = net::endpoint::len;
-  auto connfd = co_await ctx_cache_.accept(listenfd_, peer_addr.as_sockaddr(), &addr_len);
+  auto connfd = co_await ctx.accept(listenfd_, peer_addr.as_sockaddr(), &addr_len);
   if (connfd < 0) {
     throw std::system_error(std::error_code{errno, std::system_category()});
   }
