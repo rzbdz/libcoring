@@ -16,7 +16,7 @@ class buffered : public async_buffer {
     // I think if we ask for more, which means we are expecting
     // some data, but a closed socket (EOF with ret == 0) is not what we expect,
     // thus it's considered as a error(exception).
-    if (read <= 0) {
+    if (read <= 0 && errno != EINTR) {
       co_return false;
     }
     co_return true;
@@ -26,17 +26,27 @@ class buffered : public async_buffer {
     // I think if we ask for more, which means we are expecting
     // some data, but a closed socket (EOF with ret == 0) is not what we expect,
     // thus it's considered as a error(exception).
-    if (write <= 0) {
+    if (write <= 0 && errno != EINTR) {
       co_return false;
     }
     co_return true;
   }
 
  public:
-  task<bool> read_some(char *place, size_t nbytes) {
+  /// read certain bytes. I don't think we need a read_some method
+  /// since you can always go and use the raw buffer methods like front()
+  /// and readable() to read directly, the use case such as reading directly
+  /// to structures are usable.
+  /// \param place the destination to place the data
+  /// \param nbytes how many you want, it would block the coroutine
+  ///        until get the amount data you want, only when an error
+  ///        occurs will you get a false return value, which indicates that
+  ///        the socket might be closed.
+  /// \return
+  task<bool> read_certain(char *place, size_t nbytes) {
     while (readable() < nbytes) {
-      bool read = co_await try_read_more();
-      if (!read) {
+      bool has_more = co_await try_read_more();
+      if (!has_more) {
         co_return false;
       }
     }
@@ -44,7 +54,11 @@ class buffered : public async_buffer {
     pop_front(nbytes);
     co_return true;
   }
-
+  /// I don't know how to design the error handling
+  /// when you need the return value used.
+  /// I think I 'd better make all methods to
+  /// hasexcept and then return void.
+  /// \return
   task<std::string> read_line() {
     const char *end = nullptr;
     bool read;
