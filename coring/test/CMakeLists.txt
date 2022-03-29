@@ -13,13 +13,18 @@ add_executable(async_log_test async_logger_test.cpp)
 target_link_libraries(async_log_test logging)
 
 add_executable(tcp_client_raw tcp_client_raw.cpp)
-target_link_libraries(tcp_client_raw uring coring_utils)
+target_link_libraries(tcp_client_raw uring coring_net)
 
 add_executable(tcp_server_raw tcp_server_raw.cpp)
-target_link_libraries(tcp_server_raw uring coring_utils)
+target_link_libraries(tcp_server_raw uring coring_net)
 
 add_executable(onepage_webserver onepage_webserver.cpp)
 target_link_libraries(onepage_webserver uring logging coring_net)
+TARGET_LINK_LIBRARIES(onepage_webserver ${CMAKE_THREAD_LIBS_INIT})
+
+add_executable(threaded_server revised_singlepage_webserver.cpp)
+target_link_libraries(threaded_server uring logging coring_net)
+TARGET_LINK_LIBRARIES(threaded_server ${CMAKE_THREAD_LIBS_INIT})
 
 # skiplist_map
 add_executable(skiplist_test skiplist_test.cpp)
