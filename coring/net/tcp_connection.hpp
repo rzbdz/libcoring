@@ -1,4 +1,4 @@
-
+/// TODO: A bad abstraction, remove it later
 #ifndef CORING_TCP_CONNECTION_HPP
 #define CORING_TCP_CONNECTION_HPP
 
@@ -43,6 +43,7 @@ class connection_base : public socket, public AddrOption {
   connection_base(socket so, net::endpoint local, net::endpoint peer) : socket{so}, AddrOption(local, peer) {}
   connection_base(socket so, net::endpoint end) : socket{so}, AddrOption(end) {}
   ~connection_base() = default;
+  operator int() { return socket::fd(); }
 };
 typedef connection_base<empty> connection;
 typedef connection_base<peer_endpoint> peer_connection;

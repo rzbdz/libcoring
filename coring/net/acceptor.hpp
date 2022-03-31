@@ -38,7 +38,9 @@ class acceptor : noncopyable {
  public:
   /// normally we won't read or write to a listen fd, just mark it with explicit
   /// \return a file_descriptor view
-  explicit operator file_descriptor() { return {listenfd_}; }
+  operator file_descriptor() { return {listenfd_}; }
+
+  int fd() { return listenfd_; }
 
   auto get_local_endpoint() { return local_addr_; }
 
