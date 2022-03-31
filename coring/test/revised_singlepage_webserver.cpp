@@ -16,7 +16,7 @@
 // and boost asio, I will do that after the whole picture
 // settle down and bugs get fixed.
 #include "coring/net/acceptor.hpp"
-#include "coring/net/buffered.hpp"
+#include "coring/net/socket_duplexer.hpp"
 #include "coring/io/timeout.hpp"
 #include <thread>
 #include <iostream>
@@ -30,14 +30,9 @@ constexpr char response200[] =
 
 task<> send_200_then_quit(tcp::connection conn) {
   try {
-    auto wrapper = io::buffered(conn, sizeof(response200));
-    for (;;) {
-      auto str = co_await wrapper.read_crlf_line();
-      if (str.size() >= 2 && (str[0] == '\r' && str[1] == '\n')) {
-        co_await wrapper.write_some(response200, sizeof(response200));
-        break;
-      }
-    }
+    auto wrapper = socket_reader(conn, sizeof(response200));
+    [[maybe_unused]] auto str = co_await wrapper.read_till_2crlf();
+    co_await socket_writer(conn, response200).write_all_to_file();
   } catch (std::exception &e) {
     std::cout << "inside read" << e.what() << std::endl;
   }
@@ -46,21 +41,19 @@ task<> send_200_then_quit(tcp::connection conn) {
 }
 task<> acceptor(std::stop_token tk, tcp::acceptor &act) {
   try {
-    int count = 0;
     while (tk.stop_requested() == false) {
-      auto conn = act.sync_accept<tcp::connection>();
+      auto conn = co_await act.accept();
       coro::spawn(send_200_then_quit(std::move(conn)));
-      count = (count + 1) % 2;
     }
   } catch (std::exception &e) {
     std::cout << "inside accept: " << e.what() << std::endl;
   }
 }
 void setup_acceptor(io_context *ctx, tcp::acceptor &act, std::stop_token tk) {
-  ctx[0].schedule(acceptor(tk, act));
-  ctx[1].schedule(acceptor(tk, act));
-  ctx[2].schedule(acceptor(tk, act));
-  ctx[3].schedule(acceptor(tk, act));
+  ctx->register_files({act.fd()});
+  for (int i = 0; i < 4; i++) {
+    ctx[i].schedule(acceptor(tk, act));
+  }
 }
 int main(int argc, char *argv[]) {
   io_context ctx[4];
@@ -79,7 +72,6 @@ int main(int argc, char *argv[]) {
   std::jthread jtx2([&]() { ctx[1].run(lt); });
   std::jthread jtx3([&]() { ctx[2].run(lt); });
   std::jthread jtx4([&]() { ctx[3].run(lt); });
-
   return 0;
 }
 

@@ -1,106 +1,30 @@
 
-#ifndef CORING_BUFFERED_HPP
-#define CORING_BUFFERED_HPP
+#ifndef CORING_SOCKET_READER_HPP
+#define CORING_SOCKET_READER_HPP
 #define CORING_EXTRA_THREAD_BUFFER
 #include <coroutine>
 #include <cstddef>
-#include "coring/utils/file_descriptor.hpp"
+#include "file_descriptor.hpp"
 #include "coring/utils/buffer.hpp"
 #include "coring/async/task.hpp"
 #include "coring/io/io_context.hpp"
 #include "socket.hpp"
-#include "coring/utils/const_buffer.hpp"
-
-namespace coring::io {
-template <typename UpperType = buffer>
-class buffered_writer {
- public:
-  template <typename... Args>
-  explicit buffered_writer(file_descriptor fd, Args &&...args)
-      : fd_{fd}, upper_layer_{std::forward<Args...>(args...)} {}
-  // C++17
-  explicit buffered_writer(file_descriptor fd, UpperType &&up) : fd_{fd}, upper_layer_{std::forward<UpperType>(up)} {}
-
- public:
-  // TODO: not work yet
-  [[maybe_unused]] void register_buffer() {
-    // since the buffers should be registered and cancel at a syscall,
-    // It's not good to use such a interface.
-    // It would be better if we just return a iovec,
-    // make user to register all buffers they have.
-    // another problem is our buffer would realloc dynamically
-    // so there should be a intermedia.
-    // Bad story....
-    // We'd better write another fixed-size-buffer.
-  }
-  /// just one write.
-  /// \param
-  /// \return
-  [[nodiscard]] task<int> write_to_file() {
-    auto &ctx = coro::get_io_context_ref();
-    auto n = co_await ctx.write(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-    if (n <= 0 && errno != EINTR) {
-      throw std::runtime_error("socket closed or sth happened trying to write");
-    }
-    upper_layer_.pop_front(n);
-    co_return n;
-  }
-  /// write all to file, we must handle exception
-  /// \param
-  /// \return
-  [[nodiscard]] task<size_t> write_all_to_file() {
-    size_t n = upper_layer_.readable();
-    auto &ctx = coro::get_io_context_ref();
-    while (n != 0) {
-      auto writed = co_await ctx.write(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-      if (writed <= 0 && errno != EINTR) {
-        throw std::runtime_error("socket closed or sth happened trying to write");
-      }
-      upper_layer_.pop_front(writed);
-      n -= writed;
-    }
-    co_return n;
-  }
-
-  task<> write_certain_incrementally(const char *place, size_t nbytes) {
-    static_assert(std::is_invocable_v);
-    upper_layer_.push_back(place, nbytes);
-    co_await write_to_file();
-  }
-  task<> write_certain_loosely(const char *place, size_t nbytes) {
-    static_assert(std::is_same_v<UpperType, buffer>);
-    upper_layer_.push_back(place, nbytes);
-    if (upper_layer_.readable() >= 64 * 1024) {
-      co_await write_to_file();
-    }
-  }
-
-  task<> write_certain_strictly(const char *place, size_t nbytes) {
-    upper_layer_.push_back(place, nbytes);
-    co_await write_all_to_file();
-  }
-
-  task<> write_certain(const char *place, size_t nbytes) {
-    upper_layer_.push_back(place, nbytes);
-    co_await write_to_file();
-  }
-
- private:
-  int fd_;
-  UpperType upper_layer_;
-};
-
-/// This class is a wrapper supporting io_context
+namespace coring {  /// This class is a wrapper supporting io_context
 /// for char vector based buffer. (just like a decorator)
 /// TODO: not a good design for different buffers...
 /// But the interfaces is not simple to design.
-class buffered_reader {
+/// TODO: I am sad that the constructing ways of the socket_reader and socket_writer
+/// are widely different.
+/// I should make socket_reader support different buffer too,
+/// also don't use the awkward function constructor that need
+/// to be written manually...
+class socket_reader {
  public:
-  explicit buffered_reader(file_descriptor fd, size_t sz = buffer::default_size) : fd_{fd}, upper_layer_{sz} {}
-  explicit buffered_reader(file_descriptor fd, buffer &&container) : fd_{fd}, upper_layer_{std::move(container)} {}
+  explicit socket_reader(socket fd, size_t sz = buffer::default_size) : fd_{fd}, upper_layer_{sz} {}
+  explicit socket_reader(socket fd, buffer &&container) : fd_{fd}, upper_layer_{std::move(container)} {}
 
  private:
-#ifdef CORING_EXTRA_THREAD_BUFFER
+#ifndef CORING_NO_EXTRA_THREAD_BUFFER
   // TODO: add support for dynamic allocation.
   // TODO: add support for read_fixed,write_fixed
   static thread_local char extra_buffer_[65536];
@@ -111,10 +35,11 @@ class buffered_reader {
   /// But when it comes to the long-fat one, it won't be the same.
   /// \param
   /// \return how many we read from fd.
-  [[nodiscard]] task<int> read_from_file();
+  [[nodiscard]] task<int> sync_from_socket();
+
   task<int> read_some() {
     std::cout << "inside read some" << std::endl;
-    co_await read_from_file();
+    co_return co_await sync_from_socket();
   }
 
   /// read certain bytes. I don't think we need a read_some method
@@ -129,7 +54,7 @@ class buffered_reader {
   /// \return
   task<> read_certain(char *place, size_t nbytes) {
     while (upper_layer_.readable() < nbytes) {
-      co_await read_from_file();
+      co_await sync_from_socket();
     }
     ::memcpy(place, upper_layer_.front(), nbytes);
     upper_layer_.pop_front(nbytes);
@@ -147,7 +72,7 @@ class buffered_reader {
       end = upper_layer_.find_eol();
     }
     while (end == nullptr) {
-      auto read = co_await read_from_file();
+      auto read = co_await sync_from_socket();
       if (read <= 0 && errno != EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
@@ -165,7 +90,7 @@ class buffered_reader {
       end = upper_layer_.find_eol();
     }
     while (end == nullptr) {
-      auto read = co_await read_from_file();
+      auto read = co_await sync_from_socket();
       if (read <= 0 && errno != EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
@@ -187,7 +112,7 @@ class buffered_reader {
       end = upper_layer_.find_crlf();
     }
     while (end == nullptr) {
-      auto read = co_await read_from_file();
+      auto read = co_await sync_from_socket();
       if (read <= 0 && errno != EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
@@ -205,7 +130,7 @@ class buffered_reader {
       end = upper_layer_.find_crlf();
     }
     while (end == nullptr) {
-      auto read = co_await read_from_file();
+      auto read = co_await sync_from_socket();
       if (read <= 0 && errno != EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
@@ -227,7 +152,7 @@ class buffered_reader {
       end = upper_layer_.find_2crlf();
     }
     while (end == nullptr) {
-      auto read = co_await read_from_file();
+      auto read = co_await sync_from_socket();
       if (read <= 0 && errno != EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
@@ -245,7 +170,7 @@ class buffered_reader {
       end = upper_layer_.find_2crlf();
     }
     while (end == nullptr) {
-      auto read = co_await read_from_file();
+      auto read = co_await sync_from_socket();
       if (read <= 0 && errno != EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
@@ -273,23 +198,9 @@ class buffered_reader {
   }
 
  private:
-  int fd_;
+  socket fd_;
   buffer upper_layer_;
 };
-typedef buffered_writer<const_buffer> const_writer;
+}  // namespace coring
 
-class buffered : public buffered_reader, public buffered_writer<buffer> {
- public:
-  explicit buffered(file_descriptor fd, size_t sz = buffer::default_size)
-      : buffered_reader{fd, sz}, buffered_writer{fd, sz} {}
-  explicit buffered(file_descriptor read_fd, file_descriptor write_fd, size_t sz = buffer::default_size)
-      : buffered_reader{read_fd, sz}, buffered_writer{write_fd, sz} {}
-  explicit buffered(file_descriptor read_fd, file_descriptor write_fd, size_t rdsz = buffer::default_size,
-                    size_t wrsz = buffer::default_size)
-      : buffered_reader{read_fd, rdsz}, buffered_writer{write_fd, wrsz} {}
-  explicit buffered(file_descriptor read_fd, file_descriptor write_fd, buffer &&rd_buffer, buffer &&wr_buffer)
-      : buffered_reader{read_fd, std::move(rd_buffer)}, buffered_writer{write_fd, std::move(wr_buffer)} {}
-};
-}  // namespace coring::io
-
-#endif  // CORING_BUFFERED_HPP
+#endif  // CORING_SOCKET_READER_HPP

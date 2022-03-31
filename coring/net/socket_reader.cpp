@@ -1,10 +1,11 @@
-#include "buffered.hpp"
-#ifdef CORING_EXTRA_THREAD_BUFFER
-thread_local char coring::io::buffered_reader::extra_buffer_[65536];
+#include "socket_reader.hpp"
+#ifndef CORING_NO_EXTRA_THREAD_BUFFER
+thread_local char coring::socket_reader::extra_buffer_[65536];
 #endif
-coring::task<int> coring::io::buffered_reader::read_from_file() {
+coring::task<int> coring::socket_reader::sync_from_socket() {
   auto &ctx = coro::get_io_context_ref();
-#ifdef CORING_EXTRA_THREAD_BUFFER  // I don't really want to keep this...
+#ifndef CORING_NO_EXTRA_THREAD_BUFFER
+  // I don't really want to keep this...
   // reduce syscalls caused by insufficient buffer writable size.
   char *borrow = extra_buffer_;
   struct iovec vec[2];
