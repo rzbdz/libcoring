@@ -820,6 +820,9 @@ class io_context : public coring::detail::io_uring_context {
   }
 
   void stop() {
+    if (reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0)) == this) {
+      stopped_ = true;
+    }
     // lazy stop
     // notify this context, then fall into the run()-while loop-break,
     notify(EV_STOP_MSG);
