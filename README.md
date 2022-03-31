@@ -6,9 +6,13 @@ file.
 
 ---
 ---
-This project learn and modified some codes from below projects:
+This project learn from following library or repositories:
+
+- proactor pattern [boost.asio](https://www.boost.org/doc/libs/1_78_0/doc/html/boost_asio.html)
+- use buffer selection of io_uring in practice [io_uring-echo-server](https://github.com/frevib/io_uring-echo-server)
+- use io_uring in practice [Lord of the io_uring guide](https://github.com/shuveb/loti-examples)
+
+This project learn and modified some codes from following library or repositories:
 
 - use C++20 coroutine in practice: [cppcoro](https://github.com/lewissbaker/cppcoro)
 - use io_uring in OOP way [liburing4cpp](https://github.com/CarterLi/liburing4cpp)
-- use io_uring in practice [io_uring-echo-server](https://github.com/frevib/io_uring-echo-server)
-- proactor pattern [boost.asio](https://www.boost.org/doc/libs/1_78_0/doc/html/boost_asio.html)
