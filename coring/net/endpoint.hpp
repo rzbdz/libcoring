@@ -56,8 +56,14 @@ class endpoint {
   }
   // For MT-Safe gethostbyname_r
   static thread_local char local_resolve_buffer[64 * 1024];
-
+  /// Get a string like: "127.0.0.1" (ipv4 only)
+  std::string address_str();
+  /// Get a string like: "127.0.0.1:80" (ipv4 only)
+  std::string to_str();
   static bool resolve(const std::string &hostname, endpoint *out);
+  /// since the port isn't provided, we set it to 80 by default
+  /// \param hostname sth like "www.xxxx.com"
+  /// \return a endpoint with www.xxxx.com:80
   static endpoint from_resolve(const std::string &hostname);
   static endpoint from_resolve(const std::string &hostname, int port);
   [[nodiscard]] sa_family_t family() const { return addr4_.sin_family; }
@@ -70,6 +76,7 @@ class endpoint {
  private:
   ::sockaddr_in addr4_;
 };
+typedef endpoint endpoint_v4;
 }  // namespace coring::net
 
 #endif  // CORING_ENDPOINT_HPP

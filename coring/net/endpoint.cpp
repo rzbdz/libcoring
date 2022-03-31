@@ -33,18 +33,38 @@ void itoa2(char buf[], int val, int rdx, int cap) {
 }
 
 /// TODO: this is very slow...
-/// \param ipv4_int
 /// \return
-std::string int_to_ipv4(uint ipv4_int) {
+std::string coring::net::endpoint::address_str() {
+  uint ipv4_int = *reinterpret_cast<uint *>(&addr4_.sin_addr);
   std::string ip_strs[4];
   for (int i = 0; i < 4; i++) {
     uint pos = i * 8;
-    uint andi = ipv4_int & (255 << pos);
+    uint and_v = ipv4_int & (255 << pos);
     char buf[4];
-    itoad(buf, andi >> pos);
+    itoad(buf, and_v >> pos);
     ip_strs[i] = std::string(buf);
   }
   return ip_strs[0] + "." + ip_strs[1] + "." + ip_strs[2] + "." + ip_strs[3];
+}
+
+/// TODO: this is very slow...
+/// \param ipv4_int
+/// \return
+std::string coring::net::endpoint::to_str() {
+  uint ipv4_int = *reinterpret_cast<uint *>(&addr4_.sin_addr);
+  std::string ip_strs[4];
+  for (int i = 0; i < 4; i++) {
+    uint pos = i * 8;
+    uint and_v = ipv4_int & (255 << pos);
+    char buf[4];
+    itoad(buf, and_v >> pos);
+    ip_strs[i] = std::string(buf);
+  }
+  char port_buf[10];
+  port_buf[0] = ':';
+  itoad(port_buf, static_cast<int>(network_to_host(addr4_.sin_port)));
+  auto p = std::string(port_buf);
+  return ip_strs[0] + "." + ip_strs[1] + "." + ip_strs[2] + "." + ip_strs[3] + p;
 }
 
 /// Warning: no port is specific, if you need to do HTTP/HTTPS stuff, just
