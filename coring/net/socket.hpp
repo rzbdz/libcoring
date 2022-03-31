@@ -9,15 +9,14 @@
 
 #include "coring/utils/buffer.hpp"
 #include "endpoint.hpp"
-#include "coring/utils/file_descriptor.hpp"
+#include "file_descriptor.hpp"
 namespace coring {
-class socket {
+class socket : public file_descriptor {
  protected:
  public:
-  socket(int fd = -1) : fd_{fd} {}
+  socket(int fd = -1) : file_descriptor{fd} {}
   int fd() { return fd_; }
   void set_fd(int fd) { fd_ = fd; }
-  operator file_descriptor() { return {fd_}; }  // NOLINT
   int error();
   std::error_code error_code() { return {error(), std::system_category()}; }
   net::endpoint local_endpoint();
@@ -25,9 +24,10 @@ class socket {
 
   bool is_self_connect();
   void setsockopt(int level, int optname, const void *optval, socklen_t optlen);
+
   /// set the linger option
   /// If your process call close(), FIN would be sent from the closing side by default
-  /// note: you can call enable_elegant_quit to set socket option SO_LINGER to make it send RST instead of FIN
+  /// note: you can call set_linger to set socket option SO_LINGER to make it send RST instead of FIN
   /// If your process exit without closing the socket, kernel would close the tcp connection and
   /// do the clean up for your process. FIN or RST can be sent.
   /// If there is data in your receive queue, RST would be sent. Otherwise, FIN would be sent.
@@ -39,15 +39,15 @@ class socket {
   /// <p>--- linger !=0 => try to do case onoff = 0 if no timeout(linger seconds replaces tcp_fin_timeout) </p>
   /// If enable this use default parameter, when you call close, it would block.
   /// you should use io_context::close to close the socket.
-  void enable_elegant_quit(u_short onoff = 1, ushort linger = 1) {
+  void set_linger(u_short onoff = 1, ushort linger = 30) {
     struct linger tmp = {onoff, linger};
     setsockopt(SOL_SOCKET, SO_LINGER, &tmp, sizeof(tmp));
   }
-  void shutdown(int how);
+  detail::io_awaitable shutdown(int how);
 
-  void shutdown() { shutdown(SHUT_RDWR); }
-  void shutdown_write() { shutdown(SHUT_WR); }
-  void shutdown_read() { shutdown(SHUT_RD); }
+  detail::io_awaitable shutdown() { return shutdown(SHUT_RDWR); }
+  detail::io_awaitable shutdown_write() { return shutdown(SHUT_WR); }
+  detail::io_awaitable shutdown_read() { return shutdown(SHUT_RD); }
 
   void set_tcp_no_delay(bool on);
 
@@ -56,11 +56,6 @@ class socket {
   void set_reuse_port(bool on);
 
   void set_keep_alive(bool on);
-
-  void close() { ::close(fd_); }
-
- protected:
-  int fd_{-1};
 };
 }  // namespace coring
 
