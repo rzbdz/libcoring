@@ -39,6 +39,7 @@ class endpoint {
     if (::inet_pton(AF_INET, ip.c_str(), &addr4_.sin_addr) <= 0) {
       throw std::runtime_error("wrong ip address form");
     }
+    // std::cout << *(reinterpret_cast<uint32_t *>(&addr4_.sin_addr)) << std::endl;
   }
   explicit endpoint(const std::string &ip_port) {
     auto split_ptr = ::strchr(ip_port.c_str(), ':');
@@ -58,8 +59,11 @@ class endpoint {
 
   static bool resolve(const std::string &hostname, endpoint *out);
   static endpoint from_resolve(const std::string &hostname);
+  static endpoint from_resolve(const std::string &hostname, int port);
   [[nodiscard]] sa_family_t family() const { return addr4_.sin_family; }
-  [[nodiscard]] uint64_t port() const { return addr4_.sin_port; }
+  [[nodiscard]] uint16_t port() const { return addr4_.sin_port; }
+  /// make sure you pass by a network endian
+  void set_port(uint16_t p) { addr4_.sin_port = p; }
   auto as_sockaddr() { return detail::sockaddr_cast(&addr4_); }
   auto as_sockaddr_in() { return &addr4_; }
 
