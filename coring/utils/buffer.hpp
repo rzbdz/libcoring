@@ -5,43 +5,43 @@
 #define LDR(fmt, args...) static_cast<void>(0)
 // #define LDR LOG_DEBUG_RAW
 #include "coring/utils/debug.hpp"
-
+#include "buffer_base.hpp"
 #include <vector>
 #include <string>
 #include <cassert>
 #include <cstring>
 #include <sys/uio.h>
-// class test_test_class;
+#include <iostream>
 
 namespace coring {
-/// It isn't thread safe or lock-free for there are dynamic allocation...
-class buffer {
- protected:
-  static constexpr size_t default_size = 128;
-  constexpr static const char kCRLF[] = "\r\n";
+
+class buffer : public detail::buffer_base {
+ public:
+  // 4 bytes would be a waste...
+  constexpr static const char kCRLF[] = "\r\n\r\n";
 
  public:
-  explicit buffer(size_t init_size = default_size) : data_(default_size) {}
+  explicit buffer(size_t init_size = default_size) : data_(default_size) { std::cout << "ctor?buffer\n"; }
+  explicit buffer(buffer &&rhs) : buffer_base{rhs}, data_{std::move(rhs.data_)} {}
+
   // meta
   size_t capacity() const { return data_.capacity(); }
   size_t writable() const { return data_.size() - index_write_; }
-  size_t readable() const { return index_write_ - index_read_; }
 
-  void clear() { index_read_ = index_write_ = 0; }
   const char *front() const {
-    //    LDR("front, return const cannot be modifyied");
+    LDR("front, return const cannot be modifyied");
     return (data_.data() + index_read_);
   }
-  // get int/string from data
-  void pop_front(size_t len) {
-    assert(len <= readable());
-    if (len == readable()) {
-      LDR("pop_front %lu, but is larger, clear all", len);
-      clear();
-    } else {
-      index_read_ += len;
-      LDR("pop_front %lu, now: con: %lu, pro: %lu", len, index_read_, index_write_);
+
+  std::string pop_string(size_t len) {
+    LDR("pop_front a string: %lu", len);
+    if (len > readable()) {
+      LDR("ask for too long!");
+      len = readable();
     }
+    std::string ret(front(), len);
+    pop_front(len);
+    return ret;
   }
 
   template <typename IntType>
@@ -54,18 +54,17 @@ class buffer {
     return coring::net::network_to_host(ret);
   }
 
-  void push_back(size_t len) {
-    LDR("increase length by %lu, ori:", len);
-    LOG_B();
-    index_write_ += len;
-    LDR("now:");
-    LOG_B();
-  }
   const char *back() const {
     LDR("back, dangerous, %lu", index_write_);
     return data_.data() + index_write_;
   }
   char *back() { return data_.data() + index_write_; }
+
+  void push_back(size_t len) {
+    LDR("increase length by %lu, ori:", len);
+    index_write_ += len;
+    LDR("now:");
+  }
 
   const char *back(size_t want) {
     if (want > writable()) {
@@ -92,38 +91,50 @@ class buffer {
     push_back(&to_put, sizeof(IntType));
   }
 
-  std::string pop_string(size_t len) {
-    LDR("pop_front a string: %lu", len);
-    if (len > readable()) {
-      LDR("ask for too long!");
-      len = readable();
-    }
-    std::string ret(front(), len);
-    pop_front(len);
-    return ret;
-  }
-
   void push_back_string(std::string str) {
     size_t len = str.size();
     LDR("push back a string: %s, %lu", str.data(), len);
     push_back(str.data(), len);
   }
-
+  /// As named
+  /// \return the place of first cr (\r)
   const char *find_crlf() const {
     const char *crlf = std::search(front(), back(), kCRLF, kCRLF + 2);
     return crlf == back() ? nullptr : crlf;
   }
 
+  /// as named
+  /// \param start
+  /// \return the place of first cr (\r)
   const char *find_crlf(const char *start) const {
     const char *crlf = std::search(start, back(), kCRLF, kCRLF + 2);
     return crlf == back() ? nullptr : crlf;
   }
 
+  /// For http header separator (RFC 2616 s4.1)
+  /// \return the place of first cr (\r)
+  const char *find_2crlf() const {
+    const char *crlf = std::search(front(), back(), kCRLF, kCRLF + 4);
+    return crlf == back() ? nullptr : crlf;
+  }
+
+  /// For http header separator (RFC 2616 s4.1)
+  /// \param start
+  /// \return the place of first cr (\r)
+  const char *find_2crlf(const char *start) const {
+    const char *crlf = std::search(start, back(), kCRLF, kCRLF + 4);
+    return crlf == back() ? nullptr : crlf;
+  }
+
+  /// find a '\n'
+  /// \return the place of first lf
   const char *find_eol() const {
     const void *eol = memchr(front(), '\n', readable());
     return static_cast<const char *>(eol);
   }
 
+  /// find a '\n'
+  /// \return the place of first lf
   const char *findEOL(const char *start) const {
     const void *eol = memchr(start, '\n', back() - start);
     return static_cast<const char *>(eol);
@@ -137,24 +148,14 @@ class buffer {
       index_read_ = 0;
       index_write_ = now_have;
       LDR("make room: move readable %lu", want);
-      LOG_B();
     }
     if (writable() < want) {
       data_.resize(index_write_ + want);
     }
-    LOG_B();
   }
-
-  // friend test_test_class;
 
  private:
-  void LOG_B() {
-    //      LOG_INFO("info of buffer: %p, index_con: %lu, index_pro: %lu, sz: %lu, can_r: %lu, can_w: %lu, capa: %lu",
-    //               (void *)(this), index_read_, index_write_, data_.size(), readable(), writable(), capacity());
-  }
   std::vector<char> data_;
-  size_t index_read_{0};
-  size_t index_write_{0};
 };
 }  // namespace coring
 #endif  // CORING_BUFFER_HPP
