@@ -70,10 +70,11 @@ void async_logger::poll() {
   for (auto &h : backlogs) {
     update_datetime(log_timestamp(h.second.ts_));
     write_prefix(h.second);
+    write_space();
     auto out = std::back_inserter(*writing_buffer_);
-    h.first(out);
     write_filename(h.second);
-    fmt::format_to(out, ":{}\n", h.second.line_);
+    fmt::format_to(out, ":{} ", h.second.line_);
+    h.first(out);
   }
   // flush to file
   if (force_flush_ || writing_buffer_->size() >= k_max_buffer - suggested_single_log_max_len) {

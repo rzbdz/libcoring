@@ -145,6 +145,7 @@ class async_logger : noncopyable {
     write_pid(e);
     write_level(e);
   }
+  void write_space() { writing_buffer_->insert(writing_buffer_->end(), ' '); }
   void write_filename(log_entry &e) {
     writing_buffer_->insert(writing_buffer_->end(), e.file_.data_, e.file_.data_ + e.file_.size_);
   }
