@@ -65,7 +65,11 @@ class endpoint {
   /// \param hostname sth like "www.xxxx.com"
   /// \return a endpoint with www.xxxx.com:80
   static endpoint from_resolve(const std::string &hostname);
-  static endpoint from_resolve(const std::string &hostname, int port);
+  ///
+  /// \param hostname sth like "www.xxxx.com"
+  /// \param port a uint16 port number in [0, 65536)
+  /// \return
+  static endpoint from_resolve(const std::string &hostname, uint16_t port);
   [[nodiscard]] sa_family_t family() const { return addr4_.sin_family; }
   [[nodiscard]] uint16_t port() const { return addr4_.sin_port; }
   /// make sure you pass by a network endian

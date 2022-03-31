@@ -105,7 +105,7 @@ coring::net::endpoint coring::net::endpoint::from_resolve(const std::string &hos
   return res;
 }
 
-coring::net::endpoint coring::net::endpoint::from_resolve(const std::string &hostname, int port) {
+coring::net::endpoint coring::net::endpoint::from_resolve(const std::string &hostname, uint16_t port) {
   endpoint res{};
   if (!resolve(hostname, &res)) {
     throw std::runtime_error("address resolve fails");
