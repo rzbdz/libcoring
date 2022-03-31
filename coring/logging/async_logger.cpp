@@ -78,8 +78,11 @@ void async_logger::poll() {
   // flush to file
   if (force_flush_ || writing_buffer_->size() >= k_max_buffer - suggested_single_log_max_len) {
     output_file_.append(writing_buffer_->data(), static_cast<ptrdiff_t>(writing_buffer_->size()));
+    if (force_flush_) {
+      output_file_.force_flush();
+      force_flush_ = false;
+    }
     writing_buffer_->clear();
-    force_flush_ = false;
   }
 }
 
@@ -89,6 +92,7 @@ void async_logger::logging_loop() {
     poll();
     std::unique_lock lk(mutex_);
     cond_.wait_for(lk, std::chrono::seconds(flush_interval_));
+    force_flush_ = true;
   }
   // At this time, the thread should be stop_requested,
   // Thus, the variable should be safe if nobody stupidly
