@@ -82,40 +82,32 @@ class io_uring_context : noncopyable {
   }
   /**
    * Link a timeout to a async operation
-   * timeout_flagsmay contain IORING_TIMEOUT_ABSfor an absolute timeout value, or 0 for a relative timeout
+   *
    * @param ts
-   * @param flags
-   * @param iflags
+   * @param flags timeout_flags may contain IORING_TIMEOUT_ABS for an absolute timeout value, or 0 for a relative
+   * timeout
+   * @param iflags IOSQE_* flags
    */
-  void link_timeout(struct __kernel_timespec *ts, unsigned flags = 0, uint8_t iflags = IOSQE_IO_LINK) {
+  void link_timeout(struct __kernel_timespec *ts, unsigned flags = 0, uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_link_timeout(sqe, ts, flags);
     io_uring_sqe_set_flags(sqe, iflags);
-    io_uring_sqe_set_data(sqe, nullptr);
-    sqe = io_uring_get_sqe_safe();
-    // sign a tail
-    io_uring_prep_nop(sqe);
-    io_uring_sqe_set_flags(sqe, 0);
     io_uring_sqe_set_data(sqe, nullptr);
   }
   /**
    * A helper method
    * Link a timeout to a async operation
-   * timeout_flagsmay contain IORING_TIMEOUT_ABSfor an absolute timeout value, or 0 for a relative timeout
+   * timeout_flags may contain IORING_TIMEOUT_ABS for an absolute timeout value, or 0 for a relative timeout
    * @param ts
-   * @param flags
-   * @param iflags
+   * @param flags timeout_flags may contain IORING_TIMEOUT_ABS for an absolute timeout value, or 0 for a relative
+   * timeout
+   * @param iflags IOSQE_* flags
    */
   io_awaitable link_timeout(io_awaitable &&async_op, struct __kernel_timespec *ts, unsigned flags = 0,
-                            uint8_t iflags = IOSQE_IO_LINK) {
+                            uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_link_timeout(sqe, ts, flags);
     io_uring_sqe_set_flags(sqe, iflags);
-    io_uring_sqe_set_data(sqe, nullptr);
-    sqe = io_uring_get_sqe_safe();
-    // sign a tail
-    io_uring_prep_nop(sqe);
-    io_uring_sqe_set_flags(sqe, 0);
     io_uring_sqe_set_data(sqe, nullptr);
     return async_op;
   }
