@@ -1,5 +1,6 @@
 #ifndef CORING_UTILS_NONCOPYABLE_H
 #define CORING_UTILS_NONCOPYABLE_H
+#pragma once
 namespace coring {
 class noncopyable {
   // also non movable

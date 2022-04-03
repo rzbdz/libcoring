@@ -543,6 +543,7 @@ class io_uring_context : noncopyable {
       return sqe;
     } else {
       // If no sqe available, just try to submit it to kernel.
+      // Here would block !!
       io_uring_cq_advance(&ring, cqe_count);
       cqe_count = 0;
       //  On success io_uring_submit(3) returns the number of submitted submission queue entries.
@@ -629,6 +630,18 @@ class io_context : public coring::detail::io_uring_context {
     }
     coring::thread::set_key_data(nullptr, 0);
   }
+
+  /// TODO: I just find a other approaches to implement user level timer...
+  /// In the current version, I just post requests of timeout everytime I wakeup, that is
+  /// stupid since there is a api- timeout who rely on a hrtimer in the kernel.
+  /// @see https://lwn.net/Articles/800308/
+  /// But the order of completions rises by prep_timeout is not guaranteed and thus I think
+  /// we do need a user timer...(or just use linked request). Also, when the amount is large,
+  /// I don't think the hrtimer(rbtree) would be better (we can do testing though).
+  /// The other approach is just use wait_cqe_with_timeout/io_uring_enter,
+  /// just like what we did with epoll before.
+  /// @see: https://github.com/axboe/liburing/issues/4
+  /// \return
   async_run init_timeout_callback() {
     while (!stopped_) {
       while (timer_.has_more_timeouts()) {
@@ -642,14 +655,13 @@ class io_context : public coring::detail::io_uring_context {
 
   void notify(uint64_t msg) {
     if (::write(internal_event_fd_, &msg, 8) == -1) {
-      // do something
+      // TODO: do something
       // it's ok since eventfd isn't been read.
       ;
-    } else {
-      // do something (logging)
-      ;
     }
+    // TODO: do something (logging)
   }
+
   void do_todo_list() {
     // since handle queue is just a bunch of function pointer in the end, we
     // just use a local copy to avoid high contention.
@@ -661,6 +673,8 @@ class io_context : public coring::detail::io_uring_context {
     }
     for (auto &t : local_copy) {
       // user should not pass any long running task in here.
+      // that is to say, a task with co_await inside instead of
+      // some blocking task...
       execute(std::move(t));
     }
     // local_copy.clear();

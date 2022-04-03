@@ -23,6 +23,7 @@ detail::timeout_awaitable timeout(Duration expiration) {
 /// \return
 template <typename TimePoint>
 detail::timeout_awaitable until(TimePoint p) {
+  throw std::runtime_error("NOT SUPPORTED YET, reported by coring::until task");
   return {};
 }
 }  // namespace coring
