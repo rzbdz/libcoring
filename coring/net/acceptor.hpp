@@ -54,15 +54,15 @@ class acceptor : noncopyable {
     net::endpoint peer_addr{};
     auto addr_len = net::endpoint::len;
     // sync_accept doesn't sleep on io_uring syscall,
-    // we have to handle eintr manually.
+    // we have to handle -EINTR manually.
     bool has = false;
     int connfd;
     while (!has) {
       connfd = ::accept(listenfd_, peer_addr.as_sockaddr(), &addr_len);
       if (connfd >= 0) {
         has = true;
-      } else if (connfd < 0 && errno != EINTR) {
-        throw std::system_error(std::error_code{errno, std::system_category()});
+      } else if (connfd < 0 && connfd != -EINTR) {
+        throw std::system_error(std::error_code{-connfd, std::system_category()});
       }
     }
     return CONNECTION_TYPE{socket{connfd}, local_addr_, peer_addr};

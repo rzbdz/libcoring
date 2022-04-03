@@ -24,24 +24,13 @@ class socket_writer_base {
   }
 
  public:
-  // TODO: not work yet
-  [[maybe_unused]] void register_buffer() {
-    // since the buffers should be registered and cancel at a syscall,
-    // It's not good to use such a interface.
-    // It would be better if we just return a iovec,
-    // make user to register all buffers they have.
-    // another problem is our buffer would realloc dynamically
-    // so there should be a intermedia.
-    // Bad story....
-    // We'd better write another fixed-size-buffer.
-  }
   /// just one write.
   /// \param
   /// \return
   [[nodiscard]] task<int> write_to_file() {
     auto &ctx = coro::get_io_context_ref();
     auto n = co_await ctx.write(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-    if (n <= 0 && errno != EINTR) {
+    if (n <= 0 && n != -EINTR) {
       throw std::runtime_error("socket closed or sth happened trying to write");
     }
     upper_layer_.pop_front(n);
@@ -55,7 +44,7 @@ class socket_writer_base {
     auto &ctx = coro::get_io_context_ref();
     while (n != 0) {
       auto writed = co_await ctx.write(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-      if (writed <= 0 && errno != EINTR) {
+      if (writed <= 0 && writed != -EINTR) {
         throw std::runtime_error("socket closed or sth happened trying to write");
       }
       upper_layer_.pop_front(writed);

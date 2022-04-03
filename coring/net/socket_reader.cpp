@@ -16,10 +16,10 @@ coring::task<int> coring::socket_reader::sync_from_socket() {
   vec[1].iov_len = sizeof(borrow);
   const int iov_cnt = (buf_free < sizeof(borrow)) ? 2 : 1;
   auto n = co_await ctx.readv(fd_, vec, iov_cnt, 0);
-  if (n <= 0 && errno != EINTR) {
+  if (n <= 0 && n != -EINTR) {
     // TODO: should I throw exception from errno here ?
     // =0 => socket closed (EOF)
-    // <0, errno was set, maybe EINTR
+    // <0, errno was set, maybe -EINTR
     throw std::runtime_error("socket closed or sth happened trying to read");
   } else if (static_cast<size_t>(n) <= buf_free) {
     upper_layer_.push_back(n);

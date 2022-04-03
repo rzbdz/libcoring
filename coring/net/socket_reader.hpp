@@ -73,7 +73,7 @@ class socket_reader {
     }
     while (end == nullptr) {
       auto read = co_await sync_from_socket();
-      if (read <= 0 && errno != EINTR) {
+      if (read <= 0 && read != -EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
       end = upper_layer_.find_eol();
@@ -91,7 +91,7 @@ class socket_reader {
     }
     while (end == nullptr) {
       auto read = co_await sync_from_socket();
-      if (read <= 0 && errno != EINTR) {
+      if (read <= 0 && read != -EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
       end = upper_layer_.find_eol();
@@ -113,7 +113,7 @@ class socket_reader {
     }
     while (end == nullptr) {
       auto read = co_await sync_from_socket();
-      if (read <= 0 && errno != EINTR) {
+      if (read <= 0 && read != -EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
       end = upper_layer_.find_crlf();
@@ -131,7 +131,7 @@ class socket_reader {
     }
     while (end == nullptr) {
       auto read = co_await sync_from_socket();
-      if (read <= 0 && errno != EINTR) {
+      if (read <= 0 && read != -EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
       end = upper_layer_.find_crlf();
@@ -153,7 +153,7 @@ class socket_reader {
     }
     while (end == nullptr) {
       auto read = co_await sync_from_socket();
-      if (read <= 0 && errno != EINTR) {
+      if (read <= 0 && read != -EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
       end = upper_layer_.find_2crlf();
@@ -171,7 +171,7 @@ class socket_reader {
     }
     while (end == nullptr) {
       auto read = co_await sync_from_socket();
-      if (read <= 0 && errno != EINTR) {
+      if (read <= 0 && read != -EINTR) {
         throw std::runtime_error("socket maybe closed");
       }
       end = upper_layer_.find_2crlf();
