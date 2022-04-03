@@ -12,7 +12,7 @@ commit log, IN DETAILED.
 The format of commit log is fixed:
 
 ```
-classification(scope): A BRIEF LINE \n
+type(scope): A BRIEF LINE \n
 \n
  - detailed explaination 1
  - detailed explaination 2
