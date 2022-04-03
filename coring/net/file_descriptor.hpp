@@ -10,7 +10,7 @@ class file_descriptor {
 
  public:
   file_descriptor(int fd) : fd_(fd) {}
-  detail::io_awaitable close() { return coro::get_io_context_ref().close(fd_); }
+  [[nodiscard]] detail::io_awaitable close() { return coro::get_io_context_ref().close(fd_); }
   operator int() { return fd_; }
 };
 

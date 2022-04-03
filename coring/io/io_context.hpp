@@ -24,6 +24,7 @@
 #include "coring/utils/debug.hpp"
 #include "coring/utils/thread.hpp"
 #include "coring/utils/io_utils.hpp"
+#include "coring/utils/time_utils.hpp"
 #include "coring/utils/execute.hpp"
 
 #include "coring/async/task.hpp"
@@ -336,22 +337,56 @@ class io_uring_context : noncopyable {
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  io_awaitable connect(int fd, sockaddr *addr, socklen_t addrlen, int flags = 0, uint8_t iflags = 0) noexcept {
+  io_awaitable connect(int fd, const sockaddr *addr, socklen_t addrlen, uint8_t iflags = 0) noexcept {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_connect(sqe, fd, addr, addrlen);
     return make_awaitable(sqe, iflags);
   }
 
-  /** Wait for specified duration asynchronously
-   * timeout_flagsmay contain IORING_TIMEOUT_ABS for an absolute timeout value, or 0 for a relative timeout
+  /** Wait for specified duration or wait until a absolute time asynchronously
+   * A timeout will trigger a wakeup event on the completion ring for anyone waiting for events. A timeout condition is
+   * met when either the specified timeout expires, or the specified number of events have completed. Either condition
+   * will trigger the event. If set to 0, completed events are not counted, which effectively acts like a timer.
+   * io_uring timeouts use the CLOCK_MONOTONIC clock source. The request will complete with -ETIME if the timeout got
+   * completed through expiration of the timer, or 0 if the timeout got completed through requests completing on their
+   * own. If the timeout was cancelled before it expired, the request will complete with -ECANCELED.
    * @see io_uring_enter(2) IORING_OP_TIMEOUT
    * @param ts initial expiration, timespec
+   * @param timeout_flags may contain IORING_TIMEOUT_ABS for an absolute timeout value, or 0 for a relative
+   * timeout
    * @param iflags IOSQE_* flags
    * @return a task object for awaiting
    */
-  io_awaitable timeout(__kernel_timespec *ts, uint8_t iflags = 0) noexcept {
+  io_awaitable timeout(__kernel_timespec *ts, uint8_t flags = 0, uint8_t iflags = 0) noexcept {
     auto *sqe = io_uring_get_sqe_safe();
-    io_uring_prep_timeout(sqe, ts, 0, 0);
+    //  off may contain a completion event count
+    io_uring_prep_timeout(sqe, ts, 0, flags);
+    return make_awaitable(sqe, iflags);
+  }
+
+  /**
+   * WARNING: unusable now...
+   * TODO: manage the lifetime of timespec correctly...
+   * Wait for specified duration asynchronously
+   * A timeout will trigger a wakeup event on the completion ring for anyone waiting for events. A timeout condition is
+   * met when either the specified timeout expires, or the specified number of events have completed. Either condition
+   * will trigger the event. If set to 0, completed events are not counted, which effectively acts like a timer.
+   * io_uring timeouts use the CLOCK_MONOTONIC clock source. The request will complete with -ETIME if the timeout got
+   * completed through expiration of the timer, or 0 if the timeout got completed through requests completing on their
+   * own. If the timeout was cancelled before it expired, the request will complete with -ECANCELED.
+   * @see io_uring_enter(2) IORING_OP_TIMEOUT
+   * @param dur a duration
+   * @param iflags IOSQE_* flags
+   * @return a task object for awaiting
+   */
+  template <typename Duration>
+  requires(!std::is_same_v<__kernel_timespec *, Duration>) io_awaitable
+      timeout(Duration &&dur, uint8_t flags = 0, uint8_t iflags = 0)
+  noexcept {
+    throw std::runtime_error("bad implementation, use reference to object on stack whose scope have exit");
+    auto ks = make_timespec(std::forward(dur));
+    auto *sqe = io_uring_get_sqe_safe();
+    io_uring_prep_timeout(sqe, &ks, 0, flags);
     return make_awaitable(sqe, iflags);
   }
 

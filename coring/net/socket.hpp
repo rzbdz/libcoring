@@ -43,11 +43,11 @@ class socket : public file_descriptor {
     struct linger tmp = {onoff, linger};
     setsockopt(SOL_SOCKET, SO_LINGER, &tmp, sizeof(tmp));
   }
-  detail::io_awaitable shutdown(int how);
+  [[nodiscard]] detail::io_awaitable shutdown(int how);
 
-  detail::io_awaitable shutdown() { return shutdown(SHUT_RDWR); }
-  detail::io_awaitable shutdown_write() { return shutdown(SHUT_WR); }
-  detail::io_awaitable shutdown_read() { return shutdown(SHUT_RD); }
+  [[nodiscard]] detail::io_awaitable shutdown() { return shutdown(SHUT_RDWR); }
+  [[nodiscard]] detail::io_awaitable shutdown_write() { return shutdown(SHUT_WR); }
+  [[nodiscard]] detail::io_awaitable shutdown_read() { return shutdown(SHUT_RD); }
 
   void set_tcp_no_delay(bool on);
 
@@ -57,6 +57,24 @@ class socket : public file_descriptor {
 
   void set_keep_alive(bool on);
 };
+/// allocate a new udp socket from system
+/// throw if error.
+/// \return
+int new_udp_socket_safe() {
+  int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+  if (fd < 0) {
+    throw std::runtime_error("no resource available for socket allocation");
+  }
+  return fd;
+}
+/// bind a local address to a socket
+/// \param fd
+/// \param addr make sure its from a net::endpoint
+void safe_bind_socket(int fd, const sockaddr *addr) {
+  if (::bind(fd, addr, net::endpoint::len) < 0) {
+    throw std::system_error(std::error_code{errno, std::system_category()});
+  }
+}
 }  // namespace coring
 
 #endif  // CORING_SOCKET_HPP

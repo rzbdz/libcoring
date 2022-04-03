@@ -31,6 +31,13 @@ struct sockaddr *sockaddr_cast(SockAddrIn *addr) {
 class endpoint {
  public:
   static constexpr socklen_t len = sizeof(sockaddr_in);
+
+  /// Just make it clear that this is trivally copyable.
+  endpoint(const endpoint &rhs) = default;
+  endpoint(endpoint &&rhs) = default;
+  endpoint &operator=(const endpoint &rhs) = default;
+  endpoint &operator=(endpoint &&rhs) = default;
+
   explicit endpoint(uint16_t port = 0) noexcept
       : addr4_{.sin_family = AF_INET, .sin_port = net::host_to_network(port)} {}
   endpoint(const std::string &ip, uint16_t port) {
@@ -54,6 +61,7 @@ class endpoint {
       throw std::runtime_error("wrong ip address form");
     }
   }
+
   // For MT-Safe gethostbyname_r
   static thread_local char local_resolve_buffer[64 * 1024];
   /// Get a string like: "127.0.0.1" (ipv4 only)
@@ -74,8 +82,9 @@ class endpoint {
   [[nodiscard]] uint16_t port() const { return addr4_.sin_port; }
   /// make sure you pass by a network endian
   void set_port(uint16_t p) { addr4_.sin_port = p; }
-  auto as_sockaddr() { return detail::sockaddr_cast(&addr4_); }
-  auto as_sockaddr_in() { return &addr4_; }
+  [[nodiscard]] auto as_sockaddr() { return detail::sockaddr_cast(&addr4_); }
+  [[nodiscard]] auto as_sockaddr() const { return detail::sockaddr_cast(&addr4_); }
+  [[nodiscard]] auto as_sockaddr_in() { return &addr4_; }
 
  private:
   ::sockaddr_in addr4_;
