@@ -75,7 +75,9 @@ class io_uring_context : noncopyable {
     io_uring_for_each_cqe(&ring, head, cqe) {
       ++cqe_count;
       auto coro = static_cast<io_token *>(io_uring_cqe_get_data(cqe));
-      if (coro) coro->resolve(cqe->res);
+      // support the timeout enter, if we have kernel support EXT_ARG
+      // then this would be unnecessary
+      if (coro != nullptr && coro != reinterpret_cast<void *>(LIBURING_UDATA_TIMEOUT)) coro->resolve(cqe->res);
     }
     io_uring_cq_advance(&ring, cqe_count);
     cqe_count = 0;
