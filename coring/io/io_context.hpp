@@ -1,3 +1,4 @@
+
 #pragma once
 #ifndef CORING_IO_CONTEXT_HPP
 #define CORING_IO_CONTEXT_HPP
@@ -40,9 +41,25 @@ namespace coring {
 namespace detail {
 constexpr uint64_t EV_BIG_VALUE = 0x1fffffffffffffff;
 constexpr uint64_t EV_SMALL_VALUE = 0x1;
+
 // This class is adopted from project liburing4cpp (MIT license).
 // It encapsulates most of liburing interfaces within a RAII class.
 // I just add some methods.
+// ---------------------------------------------------------------------------------------------------------------------
+// Copyright © 2020 Carter Li
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+// documentation files (the “Software”), to deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+// Software.
+//
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+// WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+// COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 class io_uring_context : noncopyable {
  public:
   /** Init uio / io_uring_context object
@@ -138,7 +155,7 @@ class io_uring_context : noncopyable {
    */
   io_awaitable cancel(io_cancel_token tk, int flags = 0, uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
-    io_uring_prep_cancel(sqe, tk.token_, flags);
+    io_uring_prep_cancel(sqe, tk.get_cancel_key(), flags);
     return make_awaitable(sqe, iflags);
   }
 
@@ -523,6 +540,32 @@ class io_uring_context : noncopyable {
   io_awaitable unlinkat(int dfd, const char *path, unsigned flags, uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_unlinkat(sqe, dfd, path, flags);
+    return make_awaitable(sqe, iflags);
+  }
+
+ public:
+  /**
+   * If you are registering for the first time, just prepare len*how_many memory space,
+   * then call len and how_many to be what it should be.
+   * If you are calling this for reuse a pined buffer(that is, locked from used by kernel
+   * when it's used for once), just set how_many to be one.
+   * TODO: It 'd be better to provide fast and simplify interfaces for this usage.
+   * https://lwn.net/Articles/815491/
+   * A usage example would be available here:
+   * https://github.com/frevib/io_uring-echo-server/blob/master/io_uring_echo_server.c
+   * @see io_uring_enter(2) IORING_OP_PROVIDE_BUFFERS
+   * @param addr the start address of current buffer
+   * @param len_buffer len per buffer
+   * @param how_many from addr together with first_bid start, how many to provide this time.
+   * @param group_id group multiple buffers set by there size.
+   * @param first_bid the first buffer id provided this time.
+   * @param iflags just for IOSQE_* flags like LINK option
+   * @return we need a task since this is a async operation, it's not like register_buffer.
+   */
+  io_awaitable provide_buffers(void *addr, int len_buffer, int how_many, int group_id, int first_bid,
+                               uint8_t iflags = 0) {
+    auto *sqe = io_uring_get_sqe_safe();
+    io_uring_prep_provide_buffers(sqe, addr, len_buffer, how_many, group_id, first_bid);
     return make_awaitable(sqe, iflags);
   }
 
