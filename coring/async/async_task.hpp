@@ -1,5 +1,6 @@
 /// adopted from cppcoro.
-/// The original source code is from cppcoro, Copyright (c) Lewis Baker
+/// The original source code (task.hpp) is from cppcoro, Copyright (c) Lewis Baker
+/// Modified to be a non-lazy task.
 /// Licenced under MIT license.
 #ifndef CORING_CORO_ASYNC_TASK
 #define CORING_CORO_ASYNC_TASK
@@ -29,9 +30,9 @@ class async_task_promise_base {
     bool await_ready() const noexcept { return false; }
 
     template <typename Promise>
-    std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> my_handle) noexcept {
-      if (my_handle.promise().who_await_me_) {
-        return my_handle.promise().who_await_me_;
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> async_task_handle) noexcept {
+      if (async_task_handle.promise().who_await_me_) {
+        return async_task_handle.promise().who_await_me_;
       } else {
         return std::noop_coroutine();
       }
@@ -189,31 +190,31 @@ class [[nodiscard]] async_task {
 
  private:
   struct awaitable_base {
-    std::coroutine_handle<promise_type> my_continuation_;
+    std::coroutine_handle<promise_type> task_continuation_;
 
-    explicit awaitable_base(std::coroutine_handle<promise_type> coroutine) noexcept : my_continuation_(coroutine) {}
+    explicit awaitable_base(std::coroutine_handle<promise_type> coroutine) noexcept : task_continuation_(coroutine) {}
 
     [[nodiscard]] bool await_ready() const noexcept {
-      // you just need to know my_continuation_ is the coroutine of the async_task...
+      // you just need to know task_continuation_ is the coroutine of the async_task...
       // is the async_task is already done, we know, we don't need to save any handle,
       // the control flow now switch to await_resume... that is, return the value to the co_await caller.
-      return !my_continuation_ || my_continuation_.done();
+      return !task_continuation_ || task_continuation_.done();
     }
 
     void await_suspend(std::coroutine_handle<> awaitingCoroutine) noexcept {
       // when the async_task is resumed (say by some completion handler), this awaitingCoroutine
       // will be resumed by the final_suspend.
 
-      my_continuation_.promise().set_continuation(awaitingCoroutine);
+      task_continuation_.promise().set_continuation(awaitingCoroutine);
     }
   };
 
  public:
-  async_task() noexcept : my_continuation_(nullptr) {}
+  async_task() noexcept : task_continuation_(nullptr) {}
 
-  explicit async_task(std::coroutine_handle<promise_type> coro) : my_continuation_(coro) {}
+  explicit async_task(std::coroutine_handle<promise_type> coro) : task_continuation_(coro) {}
 
-  async_task(async_task &&t) noexcept : my_continuation_(t.my_continuation_) { t.my_continuation_ = nullptr; }
+  async_task(async_task &&t) noexcept : task_continuation_(t.task_continuation_) { t.task_continuation_ = nullptr; }
 
   /// Disable copy construction/assignment.
   async_task(const async_task &) = delete;
@@ -221,19 +222,19 @@ class [[nodiscard]] async_task {
 
   /// Frees resources used by this async_task.
   ~async_task() {
-    if (my_continuation_) {
-      my_continuation_.destroy();
+    if (task_continuation_) {
+      task_continuation_.destroy();
     }
   }
 
   async_task &operator=(async_task &&other) noexcept {
     if (std::addressof(other) != this) {
-      if (my_continuation_) {
-        my_continuation_.destroy();
+      if (task_continuation_) {
+        task_continuation_.destroy();
       }
 
-      my_continuation_ = other.my_continuation_;
-      other.my_continuation_ = nullptr;
+      task_continuation_ = other.task_continuation_;
+      other.task_continuation_ = nullptr;
     }
 
     return *this;
@@ -243,21 +244,21 @@ class [[nodiscard]] async_task {
   /// Query if the async_task result is complete.
   ///
   /// Awaiting a async_task that is ready is guaranteed not to block/suspend.
-  [[nodiscard]] bool is_ready() const noexcept { return !my_continuation_ || my_continuation_.done(); }
+  [[nodiscard]] bool is_ready() const noexcept { return !task_continuation_ || task_continuation_.done(); }
 
   auto operator co_await() const &noexcept {
     struct awaitable : awaitable_base {
       using awaitable_base::awaitable_base;
 
       decltype(auto) await_resume() {
-        if (!this->my_continuation_) {
+        if (!this->task_continuation_) {
           throw broken_promise{};
         }
-        return this->my_continuation_.promise().result();
+        return this->task_continuation_.promise().result();
       }
     };
 
-    return awaitable{my_continuation_};
+    return awaitable{task_continuation_};
   }
 
   auto operator co_await() const &&noexcept {
@@ -265,15 +266,15 @@ class [[nodiscard]] async_task {
       using awaitable_base::awaitable_base;
 
       decltype(auto) await_resume() {
-        if (!this->my_continuation_) {
+        if (!this->task_continuation_) {
           throw broken_promise{};
         }
 
-        return std::move(this->my_continuation_.promise()).result();
+        return std::move(this->task_continuation_.promise()).result();
       }
     };
 
-    return awaitable{my_continuation_};
+    return awaitable{task_continuation_};
   }
 
   /// \brief
@@ -286,11 +287,11 @@ class [[nodiscard]] async_task {
       void await_resume() const noexcept {}
     };
 
-    return awaitable{my_continuation_};
+    return awaitable{task_continuation_};
   }
 
  private:
-  std::coroutine_handle<promise_type> my_continuation_;
+  std::coroutine_handle<promise_type> task_continuation_;
 };
 
 namespace detail {
@@ -309,7 +310,7 @@ async_task<T &> async_task_promise<T &>::get_return_object() noexcept {
 }
 }  // namespace detail
 template <typename Awaitable>
-auto make_task(Awaitable awaitable) -> async_task<
+auto make_async_task(Awaitable awaitable) -> async_task<
     coring::detail::remove_rvalue_reference_t<typename coring::awaitable_traits<Awaitable>::await_result_t>> {
   co_return co_await static_cast<Awaitable &&>(awaitable);
 }
