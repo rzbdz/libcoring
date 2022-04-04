@@ -11,7 +11,18 @@ target_link_libraries(io_context_test uring gtest gtest_main coring_utils fmt ${
 # skiplist_map
 add_executable(skiplist_test skiplist_test.cpp)
 target_link_libraries(skiplist_test logging gtest gtest_main ${CMAKE_THREAD_LIBS_INIT})
-
+# For github Actions.
+add_executable(
+        unit_tests
+        io_context_test.cpp
+        skiplist_test.cpp
+)
+target_link_libraries(
+        unit_tests
+        PRIVATE
+        gtest_main
+        uring gtest gtest_main logging coring_utils fmt ${CMAKE_THREAD_LIBS_INIT}
+)
 ### Non-GTest
 # LOGGER
 add_executable(async_log_test async_logger_test.cpp)
