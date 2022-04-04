@@ -1,4 +1,4 @@
-name: CMake
+name: Unit_Tests
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: essential
-    - run: |
+      run: |
         apt-get update
         apt-get install -y curl git build-essential
     - name: Install gtest manually
