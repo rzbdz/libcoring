@@ -42,9 +42,9 @@ jobs:
       env:
        CC: gcc-11
        CXX: g++-11
-    - name: Build
+    #- name: Build
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      #run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
     - name: Make Tests
       run: cd ${{github.workspace}}/build/coring/test && make unit_tests
     - name: Run Tests
