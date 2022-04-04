@@ -202,3 +202,32 @@ TEST(Timeout, recursiveTimers) {
   });
   ctx.run();
 }
+task<> sleep_for_accurate(std::chrono::microseconds t) {
+  auto stamp_before = std::chrono::duration_cast<microseconds>(system_clock::now().time_since_epoch());
+  co_await coro::get_io_context_ref().timeout(t);
+  auto stamp_after = std::chrono::duration_cast<microseconds>(system_clock::now().time_since_epoch());
+  auto pass = (stamp_after - stamp_before).count();
+  auto ti = t.count();
+  // LDR("It now time passed? %ldus, oder: %d, %ldus from my count", t.count(), local_order, pass);
+  // I don' t know why gtest assertion would return sth...
+  // error rate
+  // absolute error, 500us = 0.5ms
+  if ((std::abs(ti - pass)) >= 500) {
+    EXPECT_LE(static_cast<double>(std::abs(ti - pass)) / ti, 0.1);
+  }
+}
+TEST(DirectTimeout, ChronoTimeout) {
+  io_context ctx;
+  auto exec = ctx.as_executor();
+  using namespace std::chrono_literals;
+  schedule(exec, []() -> task<> {
+    for (int i = 0; i < 1000; i++) {
+      co_await sleep_for_accurate(i * 100ms);
+    }
+  }());
+  std::jthread t1([&ctx] {
+    sleep(20);
+    ctx.stop();
+  });
+  ctx.run();
+}

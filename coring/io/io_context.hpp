@@ -28,6 +28,7 @@
 #include "coring/utils/execute.hpp"
 
 #include "coring/async/task.hpp"
+#include "coring/async/async_task.hpp"
 #include "coring/async/when_all.hpp"
 #include "coring/async/async_scope.hpp"
 
@@ -365,7 +366,7 @@ class io_uring_context : noncopyable {
   }
 
   /**
-   * WARNING: unusable now...
+   * WARNING: not fully tested...
    * TODO: manage the lifetime of timespec correctly...
    * Wait for specified duration asynchronously
    * A timeout will trigger a wakeup event on the completion ring for anyone waiting for events. A timeout condition is
@@ -380,14 +381,13 @@ class io_uring_context : noncopyable {
    * @return a task object for awaiting
    */
   template <typename Duration>
-  requires(!std::is_same_v<__kernel_timespec *, Duration>) io_awaitable
-      timeout(Duration &&dur, uint8_t flags = 0, uint8_t iflags = 0)
+  requires(!std::is_same_v<__kernel_timespec *, std::remove_cvref<Duration>>)
+      async_task<int> timeout(Duration &&dur, uint8_t flags = 0, uint8_t iflags = 0)
   noexcept {
-    throw std::runtime_error("bad implementation, use reference to object on stack whose scope have exit");
-    auto ks = make_timespec(std::forward(dur));
+    auto ks = make_timespec(std::forward<Duration>(dur));
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_timeout(sqe, &ks, 0, flags);
-    return make_awaitable(sqe, iflags);
+    co_return co_await make_awaitable(sqe, iflags);
   }
 
   /** Open and possibly create a file asynchronously
