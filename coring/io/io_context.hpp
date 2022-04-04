@@ -155,7 +155,7 @@ class io_uring_context : noncopyable {
    */
   io_awaitable cancel(io_cancel_token tk, int flags = 0, uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
-    io_uring_prep_cancel(sqe, tk.get_cancel_key(), flags);
+    io_uring_prep_cancel(sqe, reinterpret_cast<__u64>(tk.get_cancel_key()), flags);
     return make_awaitable(sqe, iflags);
   }
 
