@@ -752,7 +752,6 @@ class io_context : public coring::detail::io_uring_context {
         stopped_ = true;
       }
     }
-    coring::thread::set_key_data(nullptr, 0);
   }
 
   /// TODO: I just find a other approaches to implement user level timer...
@@ -988,12 +987,14 @@ class io_context : public coring::detail::io_uring_context {
   void run() {
     coring::thread::set_key_data(this, 0);
     do_run();
+    coring::thread::set_key_data(nullptr, 0);
   }
 
   void run(std::latch &cd) {
     coring::thread::set_key_data(this, 0);
     cd.count_down();
     do_run();
+    coring::thread::set_key_data(nullptr, 0);
   }
 
   void stop() {
