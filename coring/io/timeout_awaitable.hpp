@@ -6,20 +6,16 @@
 #include "io_context.hpp"
 namespace coring::detail {
 struct timeout_awaitable {
-  timeout_awaitable(std::chrono::microseconds t) : timeout{t} {}
-  timeout_awaitable() = default;
+  timeout_awaitable(std::chrono::microseconds t, io_context &c) : timeout{t}, ioc{c} {}
   constexpr bool await_ready() const noexcept { return false; }
 
-  void await_suspend(std::coroutine_handle<> continuation) noexcept {
-    // TODO: user define io_context...
-    auto &ioc = coro::get_io_context_ref();
-    ioc.register_timeout(continuation, timeout);
-  }
+  void await_suspend(std::coroutine_handle<> continuation) noexcept { ioc.register_timeout(continuation, timeout); }
 
   constexpr void await_resume() const noexcept {}
 
  private:
   std::chrono::microseconds timeout;
+  io_context &ioc;
 };
 }  // namespace coring::detail
 #endif  // CORING_TIMEOUT_AWAITABLE_HPP
