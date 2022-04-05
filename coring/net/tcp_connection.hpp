@@ -41,7 +41,7 @@ namespace coring::tcp {
 /// allocate a new tcp socket from system
 /// throw if error.
 /// \return
-int new_socket_safe() {
+inline int new_socket_safe() {
   int fd = ::socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
     throw std::runtime_error("no resource available for socket allocation");
@@ -120,6 +120,7 @@ task<CONN_TYPE> connect_to(const net::endpoint &peer) {
   detail::_tcp_connection_helper::handle_connect_error(-ret, fd);
   co_return CONN_TYPE(fd);
 }
+
 /// It' s not safe for it create a socket fd implicitly,
 /// If an exception is thrown, fd might be closed, might not...
 /// Call to connect_to(fd, ...) is strongly recommended, but

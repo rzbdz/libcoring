@@ -1,4 +1,3 @@
-#include "coring/net/connect_to.hpp"
 #include "coring/net/socket_duplexer.hpp"
 #include "coring/logging/async_logger.hpp"
 #include "coring/logging/logging.hpp"
@@ -16,7 +15,7 @@ task<> short_read() {
     // resolver is slow and blocking, we need a thread pool to make sure io_context won't be blocked.
     //    tcp::connection con = co_await tcp::connect_to<tcp::connection>(net::endpoint::from_resolve("www.baidu.com",
     //    80));
-    tcp::connection con = co_await tcp::connect_to<tcp::connection>({"127.0.0.1", 11243});
+    tcp::peer_connection con = co_await tcp::connect_to({"127.0.0.1", 11243});
     auto t = socket_writer(con, request_get);
     co_await t.write_all_to_file();
     int ret = co_await coro::get_io_context_ref().read(con, buf, 64 * 1024, 0);

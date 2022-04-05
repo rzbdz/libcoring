@@ -82,3 +82,15 @@ void socket::set_keep_alive(bool on) {
     throw std::system_error(std::error_code{errno, std::system_category()});
   }
 }
+int new_udp_socket_safe() {
+  int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+  if (fd < 0) {
+    throw std::runtime_error("no resource available for socket allocation");
+  }
+  return fd;
+}
+void safe_bind_socket(int fd, const sockaddr *addr) {
+  if (::bind(fd, addr, net::endpoint::len) < 0) {
+    throw std::system_error(std::error_code{errno, std::system_category()});
+  }
+}

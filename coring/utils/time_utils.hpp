@@ -14,5 +14,18 @@ __kernel_timespec make_timespec(Duration &&duration) {
   res.tv_nsec = duration_ns.count() % 1'000'000'000;
   return res;
 }
+struct loop_timer {
+  uint64_t ms_begin;
+  loop_timer()
+      : ms_begin{static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+                .count())} {}
+  uint64_t ms_passed() const {
+    auto now_cnt = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
+    return now_cnt - ms_begin;
+  }
+};
 }  // namespace coring
 #endif  // CORING_TIME_UTILS_HPP

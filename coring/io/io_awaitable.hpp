@@ -73,7 +73,8 @@ struct io_awaitable {
   io_cancel_token get_cancel_token() {
     // TODO: this won't work at all... trying to find a solution
     // a point is when io_awaitable is created, it stat and detached.
-    return io_cancel_token{&token_ptr}; }
+    return io_cancel_token{&token_ptr};
+  }
 
  private:
   io_uring_sqe *sqe;

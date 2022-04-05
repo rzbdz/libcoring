@@ -36,9 +36,9 @@ constexpr char response200[] =
 
 task<> send_200_then_quit(tcp::connection conn, int &count) {
   count++;
-  auto read_wrapper = socket_reader(conn);
+  auto reader = socket_reader(conn);
   try {
-    [[maybe_unused]] auto str = co_await read_wrapper.read_till_2crlf();
+    [[maybe_unused]] auto str = co_await reader.read_till_2crlf();
     // str.erase(str.size() - 4, 4);
     LOG_DEBUG("read a http header: \n{}", str);
     // std::cout << str << std::endl;

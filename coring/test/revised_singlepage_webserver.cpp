@@ -36,27 +36,43 @@ task<> send_200_then_quit(tcp::connection conn) {
   } catch (std::exception &e) {
     std::cout << "inside read" << e.what() << std::endl;
   }
-  conn.shutdown();
-  conn.close();
+  co_await conn.shutdown();
+  co_await conn.close();
 }
 task<> acceptor(std::stop_token tk, tcp::acceptor &act) {
+  int how_many = 0;
   try {
     while (tk.stop_requested() == false) {
+      std::cout << "inside accept: begin accept" << std::endl;
       auto conn = co_await act.accept();
+      std::cout << "inside accept: accepted" << std::endl;
       coro::spawn(send_200_then_quit(std::move(conn)));
+      how_many++;
+      std::cout << "inside accept: next round" << std::endl;
     }
   } catch (std::exception &e) {
-    std::cout << "inside accept: " << e.what() << std::endl;
+    std::cout << "inside accept: " << e.what() << "listen fd: " << act.fd() << std::endl;
   }
+  std::cout << "this acceptor have handle: " << how_many << std::endl;
 }
-void setup_acceptor(io_context *ctx, tcp::acceptor &act, std::stop_token tk) {
-  ctx->register_files({act.fd()});
+void setup_acceptor(io_context **ctx, tcp::acceptor &act, std::stop_token tk) {
   for (int i = 0; i < 4; i++) {
-    ctx[i].schedule(acceptor(tk, act));
+    // Just for fun?
+    // ctx[i]->register_files({act.fd()});
+    ctx[i]->schedule(acceptor(tk, act));
+    ctx[i]->schedule(acceptor(tk, act));
   }
 }
 int main(int argc, char *argv[]) {
-  io_context ctx[4];
+  constexpr auto ENT = 128;
+  io_context big_bother{ENT, IORING_SETUP_SQPOLL};
+  io_uring_params params{
+      .flags = IORING_SETUP_SQPOLL | IORING_SETUP_ATTACH_WQ,
+      .sq_thread_idle = 3000,
+      .wq_fd = static_cast<__u32>(big_bother.ring_fd()),
+  };
+  io_context rest[3] = {{ENT, &params}, {ENT, &params}, {ENT, &params}};
+  // io_context rest[4];
   __u16 port = 11243;
   if (argc > 1) {
     port = static_cast<uint16_t>(::atoi(argv[1]));
@@ -65,38 +81,21 @@ int main(int argc, char *argv[]) {
   tcp::acceptor act{"0.0.0.0", port};
   act.enable();
   std::stop_source src;
+  std::stop_source &sr = src;
+  std::cout << "src ptr: ref: " << &src << " " << &sr << std::endl;
+  io_context *ctx[] = {&big_bother, &rest[0], &rest[1], &rest[2]};
+  // io_context *ctx[] = {&rest[0], &rest[1], &rest[2], &rest[3]};
+  ctx[3]->schedule([](std::stop_source *spt) -> task<> {
+    using namespace std::chrono_literals;
+    co_await timeout(100s);
+    spt->request_stop();
+  }(&src));
   setup_acceptor(ctx, act, src.get_token());
   // thread pool isn't work yet, just punt it manually.
   std::latch lt{1};
-  std::jthread jtx1([&]() { ctx[0].run(lt); });
-  std::jthread jtx2([&]() { ctx[1].run(lt); });
-  std::jthread jtx3([&]() { ctx[2].run(lt); });
-  std::jthread jtx4([&]() { ctx[3].run(lt); });
+  std::jthread jtx1([&]() { ctx[0]->run(lt); });
+  std::jthread jtx2([&]() { ctx[1]->run(lt); });
+  std::jthread jtx3([&]() { ctx[2]->run(lt); });
+  ctx[3]->run(lt);
   return 0;
 }
-
-// # An old version
-// But I found that we don't want to sleep the main thread on here
-// Because this spawn is slow , we should use multiple thread accepting concurrently.
-// avoiding this slow performance.
-// I think we should use a lock-free queue for the task queue,
-// during an interview, the interviewer asked me why I didn't use
-// lock-free queue for this kind of queues just like what I did in
-// the async logger....
-// But the problem I think is due to the 'single' restriction, which
-// means we need more thread_local memory leakage, so spsc for async
-// logger should not be used. Actually,
-// I think we can use.............. the rest notes I just move to the spawn
-// -------------------------------------------------------------------------------
-//  auto tk = src.get_token();
-//  try {
-//    int count = 0;
-//    while (tk.stop_requested() == false) {
-//      auto conn = act.sync_accept<tcp::connection>();
-//      ctx[count].spawn<true>(send_200_then_quit(std::move(conn)));
-//      count = (count + 1) % 2;
-//    }
-//  } catch (std::exception &e) {
-//    std::cout << "inside accept: " << e.what() << std::endl;
-//  }
-// --------------------------------------------------------------------------------

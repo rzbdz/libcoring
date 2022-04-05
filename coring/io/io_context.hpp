@@ -32,10 +32,11 @@
 #include "coring/async/async_task.hpp"
 #include "coring/async/when_all.hpp"
 #include "coring/async/async_scope.hpp"
+#include "coring/async/single_consumer_async_auto_reset_event.hpp"
 
 #include "io_awaitable.hpp"
 #include "timer.hpp"
-#include "coring/async/single_consumer_async_auto_reset_event.hpp"
+#include "config.hpp"
 
 namespace coring {
 namespace detail {
@@ -80,6 +81,27 @@ class io_uring_context : noncopyable {
     };
     io_uring_queue_init_params(entries, &ring, &p) | panic_on_err("queue_init_params", false);
   }
+  /**
+   * For multi-thread or SQPOLL usage
+   * @param entries Maximum sqe can be gotten without submitting
+   * @param p a params structure, you can only specify flags which can be used to set various flags and sq_thread_cpu
+   * and sq_thread_idle fields
+   * <p>p.flags could be one of these (most used):</p>
+   * <p>IORING_SETUP_IOPOLL</p>
+   * <p>IORING_SETUP_SQPOLL</p>
+   * <p>IORING_SETUP_ATTACH_WQ, with this set, the wq_fd should be set to same fd to avoid multiple thread pool</p>
+   * <p>other filed of the params are:</p>
+   * <p>sq_thread_cpu: the cpuid, you can get one from gcc utility or something, I didn't find detailed document for
+   * this field</p>
+   * <p>sq_thread_idle: a milliseconds to stop sq polling thread.</p>
+   */
+  io_uring_context(int entries, io_uring_params p) {
+    io_uring_queue_init_params(entries, &ring, &p) | panic_on_err("queue_init_params", false);
+  }
+
+  io_uring_context(int entries, io_uring_params *p) {
+    io_uring_queue_init_params(entries, &ring, p) | panic_on_err("queue_init_params", false);
+  }
 
   /** Destroy uio / io_uring_context object */
   // TODO: stop using inheritance
@@ -101,6 +123,37 @@ class io_uring_context : noncopyable {
     io_uring_cq_advance(&ring, cqe_count);
     cqe_count = 0;
   }
+
+  void polling_for_completions(uint64_t wait_for_ms) {
+    // we don't submit during fast polling, make sure kernel side is in SQPOLL mode
+    io_uring_submit_and_wait(&ring, 1);
+    io_uring_cqe *cqe;
+    unsigned head;
+    loop_timer timer;
+    for (;;) {
+      // I am going to test it...
+      io_uring_for_each_cqe(&ring, head, cqe) {
+        ++cqe_count;
+        auto coro = static_cast<io_token *>(io_uring_cqe_get_data(cqe));
+        // support the timeout enter, if we have kernel support EXT_ARG
+        // then this would be unnecessary
+        if (coro != nullptr && coro != reinterpret_cast<void *>(LIBURING_UDATA_TIMEOUT)) coro->resolve(cqe->res);
+      }
+      io_uring_cq_advance(&ring, cqe_count);
+      cqe_count = 0;
+      if (timer.ms_passed() >= wait_for_ms) {
+        // after this break, we go back to next call of this function
+        // and a submission is called, it's fine we just break here.
+        break;
+      }
+      // make sure we wake up the sq-thread if necessary
+      // TODO: we don't know if we do provide new sqe to be consumed
+      // so this could wake up the sq-thread and waste up CPU cycles.
+      io_uring_submit(&ring);
+    }
+  }
+
+ public:
   /**
    * Link a timeout to a async operation
    *
@@ -640,14 +693,31 @@ class io_uring_context : noncopyable {
  public:
   /** Return internal io_uring_context handle */
   [[nodiscard]] ::io_uring &get_ring_handle() noexcept { return ring; }
+  int ring_fd() const noexcept { return ring.ring_fd; }
+
+ protected:
+  ::io_uring ring{};
 
  private:
-  ::io_uring ring{};
   unsigned cqe_count = 0;
 };
 
 }  // namespace detail
 
+///
+/// Manual for multi-thread or SQPOLL usage
+/// @param entries Maximum sqe can be gotten without submitting
+/// @param p a params structure, you can only specify flags which can be used to set various flags and sq_thread_cpu
+///  and sq_thread_idle fields
+/// < p>p.flags could be one of these (most used):</p>
+/// < p>IORING_SETUP_IOPOLL</p>
+/// < p>IORING_SETUP_SQPOLL</p>
+/// < p>IORING_SETUP_ATTACH_WQ, with this set, the wq_fd should be set to same fd to avoid multiple thread pool</p>
+/// < p>other filed of the params are:</p>
+/// < p>sq_thread_cpu: the cpuid, you can get one from gcc utility or something, I didn't find detailed document for
+///  this field</p>
+/// < p>sq_thread_idle: a milliseconds to stop sq polling thread.</p>
+///
 class io_context : public coring::detail::io_uring_context {
  public:
   typedef io_context *executor_t;
@@ -657,6 +727,17 @@ class io_context : public coring::detail::io_uring_context {
   static constexpr uint64_t EV_STOP_MSG = detail::EV_BIG_VALUE;
   static constexpr uint64_t EV_WAKEUP_MSG = detail::EV_SMALL_VALUE;
 
+ public:
+  io_context(int entries = 64, uint32_t flags = 0, uint32_t wq_fd = 0)
+      : detail::io_uring_context{entries, flags, wq_fd} {
+    init();
+  }
+
+  io_context(int entries, io_uring_params p) : detail::io_uring_context{entries, p} { init(); }
+
+  io_context(int entries, io_uring_params *p) : detail::io_uring_context{entries, p} { init(); }
+
+ private:
   /// this coroutine should start (and be suspended) at io_context start
   coring::async_run init_eventfd() {
     uint64_t msg;
@@ -700,6 +781,8 @@ class io_context : public coring::detail::io_uring_context {
     if (::write(internal_event_fd_, &msg, 8) == -1) {
       // TODO: do something
       // it's ok since eventfd isn't been read.
+      // when it's going to stop, it's fine
+      // to stop it synchronously.
       ;
     }
     // TODO: do something (logging)
@@ -750,13 +833,11 @@ class io_context : public coring::detail::io_uring_context {
     // If need to obtain results with some awaitable fails(but other may still be posted), use when_all_ready instead.
     // use task instead of direct when_all_awaitable is just for obtaining the result. (But more things to do, may
     // depresses the performance).
-    my_scope_.spawn([&cancel_awaitables]() -> task<> {
-      [[maybe_unused]] std::vector<int> res = co_await when_all(std::move(cancel_awaitables));
-    }());
+    my_scope_.spawn([](auto &&cancel_list) -> task<> {
+      [[maybe_unused]] std::vector<int> res = co_await when_all(cancel_list);
+    }(std::move(cancel_awaitables)));
   }
-
- public:
-  io_context() {
+  void init() {
     // NONBLOCK for direct write, no influence on io_uring_read
     // internal_event_fd_ = ::eventfd(0, EFD_NONBLOCK);
     internal_event_fd_ = ::eventfd(0, 0);
@@ -769,6 +850,7 @@ class io_context : public coring::detail::io_uring_context {
     }
   }
 
+ public:
   inline executor_t as_executor() { return this; }
 
   bool inline on_this_thread() { return reinterpret_cast<decltype(this)>(coring::thread::get_key_data(0)) == this; }
@@ -884,11 +966,20 @@ class io_context : public coring::detail::io_uring_context {
     // do scheduled tasks
     do_todo_list();
     init_timeout_callback();
-    while (!stopped_) {
-      // the coroutine would be resumed inside io_token.resolve() method
-      // blocking syscall. Call io_uring_submit_and_wait.
-      wait_for_completions();
-      do_todo_list();
+    if (ring.flags & IORING_SETUP_SQPOLL) {
+      while (!stopped_) {
+        // the coroutine would be resumed inside io_token.resolve() method
+        // blocking syscall. Call io_uring_submit_and_wait.
+        polling_for_completions(CQ_POLLING_TIMEOUT_MS);
+        do_todo_list();
+      }
+    } else {
+      while (!stopped_) {
+        // the coroutine would be resumed inside io_token.resolve() method
+        // blocking syscall. Call io_uring_submit_and_wait.
+        wait_for_completions();
+        do_todo_list();
+      }
     }
     // TODO: handle stop event, deal with async_scope (issue cancellations then call join)
   }

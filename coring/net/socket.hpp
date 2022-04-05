@@ -60,21 +60,11 @@ class socket : public file_descriptor {
 /// allocate a new udp socket from system
 /// throw if error.
 /// \return
-int new_udp_socket_safe() {
-  int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-  if (fd < 0) {
-    throw std::runtime_error("no resource available for socket allocation");
-  }
-  return fd;
-}
+int new_udp_socket_safe();
 /// bind a local address to a socket
 /// \param fd
 /// \param addr make sure its from a net::endpoint
-void safe_bind_socket(int fd, const sockaddr *addr) {
-  if (::bind(fd, addr, net::endpoint::len) < 0) {
-    throw std::system_error(std::error_code{errno, std::system_category()});
-  }
-}
+void safe_bind_socket(int fd, const sockaddr *addr);
 }  // namespace coring
 
 #endif  // CORING_SOCKET_HPP

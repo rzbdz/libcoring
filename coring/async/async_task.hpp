@@ -203,7 +203,7 @@ class async_task_promise<T &> : public async_task_promise_base {
 /// until it reach the first co_await point (that blocks the coroutine), then it
 /// returns execution to the caller.
 template <typename T = void>
-class [[nodiscard]] async_task {
+class async_task {
  public:
   using promise_type = detail::async_task_promise<T>;
 
