@@ -1,7 +1,7 @@
 
 #ifndef CORING_SOCKET_READER_HPP
 #define CORING_SOCKET_READER_HPP
-#define CORING_EXTRA_THREAD_BUFFER
+#define CORING_NO_EXTRA_THREAD_BUFFER
 #include <coroutine>
 #include <cstddef>
 #include "file_descriptor.hpp"
@@ -9,6 +9,7 @@
 #include "coring/async/task.hpp"
 #include "coring/io/io_context.hpp"
 #include "socket.hpp"
+#include "config.hpp"
 namespace coring {  /// This class is a wrapper supporting io_context
 /// for char vector based buffer. (just like a decorator)
 /// TODO: not a good design for different buffers...
@@ -20,7 +21,7 @@ namespace coring {  /// This class is a wrapper supporting io_context
 /// to be written manually...
 class socket_reader {
  public:
-  explicit socket_reader(socket fd, size_t sz = buffer::default_size) : fd_{fd}, upper_layer_{sz} {}
+  explicit socket_reader(socket fd, size_t sz = CORING_READ_BUFFER_SIZE_DEFAULT) : fd_{fd}, upper_layer_{sz} {}
   explicit socket_reader(socket fd, buffer &&container) : fd_{fd}, upper_layer_{std::move(container)} {}
 
  private:
@@ -29,18 +30,14 @@ class socket_reader {
   // TODO: add support for read_fixed,write_fixed
   static thread_local char extra_buffer_[65536];
 #endif
+
  public:
   /// I think it should be same as 'read_all_from_file'
   /// for normal tcp pipe have only 64kb buffer in the kernel
   /// But when it comes to the long-fat one, it won't be the same.
   /// \param
-  /// \return how many we read from fd.
-  [[nodiscard]] task<int> sync_from_socket();
-
-  task<int> read_some() {
-    std::cout << "inside read some" << std::endl;
-    co_return co_await sync_from_socket();
-  }
+  /// \return
+  [[nodiscard]] task<> read_some();
 
   /// read certain bytes. I don't think we need a read_some method
   /// since you can always go and use the raw buffer methods like front()
@@ -54,7 +51,7 @@ class socket_reader {
   /// \return
   task<> read_certain(char *place, size_t nbytes) {
     while (upper_layer_.readable() < nbytes) {
-      co_await sync_from_socket();
+      co_await read_some();
     }
     ::memcpy(place, upper_layer_.front(), nbytes);
     upper_layer_.pop_front(nbytes);
@@ -72,10 +69,7 @@ class socket_reader {
       end = upper_layer_.find_eol();
     }
     while (end == nullptr) {
-      auto read = co_await sync_from_socket();
-      if (read <= 0 && read != -EINTR) {
-        throw std::runtime_error("socket maybe closed");
-      }
+      co_await read_some();
       end = upper_layer_.find_eol();
     }
     co_return upper_layer_.pop_string(end - upper_layer_.front() + 1);
@@ -90,10 +84,7 @@ class socket_reader {
       end = upper_layer_.find_eol();
     }
     while (end == nullptr) {
-      auto read = co_await sync_from_socket();
-      if (read <= 0 && read != -EINTR) {
-        throw std::runtime_error("socket maybe closed");
-      }
+      co_await read_some();
       end = upper_layer_.find_eol();
     }
     auto len = end - upper_layer_.front() + 1;
@@ -112,10 +103,7 @@ class socket_reader {
       end = upper_layer_.find_crlf();
     }
     while (end == nullptr) {
-      auto read = co_await sync_from_socket();
-      if (read <= 0 && read != -EINTR) {
-        throw std::runtime_error("socket maybe closed");
-      }
+      co_await read_some();
       end = upper_layer_.find_crlf();
     }
     co_return upper_layer_.pop_string(end - upper_layer_.front() + 2);
@@ -130,10 +118,7 @@ class socket_reader {
       end = upper_layer_.find_crlf();
     }
     while (end == nullptr) {
-      auto read = co_await sync_from_socket();
-      if (read <= 0 && read != -EINTR) {
-        throw std::runtime_error("socket maybe closed");
-      }
+      co_await read_some();
       end = upper_layer_.find_crlf();
     }
     auto len = end - upper_layer_.front() + 2;
@@ -152,10 +137,7 @@ class socket_reader {
       end = upper_layer_.find_2crlf();
     }
     while (end == nullptr) {
-      auto read = co_await sync_from_socket();
-      if (read <= 0 && read != -EINTR) {
-        throw std::runtime_error("socket maybe closed");
-      }
+      co_await read_some();
       end = upper_layer_.find_2crlf();
     }
     co_return upper_layer_.pop_string(end - upper_layer_.front() + 4);
@@ -170,10 +152,7 @@ class socket_reader {
       end = upper_layer_.find_2crlf();
     }
     while (end == nullptr) {
-      auto read = co_await sync_from_socket();
-      if (read <= 0 && read != -EINTR) {
-        throw std::runtime_error("socket maybe closed");
-      }
+      co_await read_some();
       end = upper_layer_.find_2crlf();
     }
     auto len = end - upper_layer_.front() + 4;
