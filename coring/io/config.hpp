@@ -1,7 +1,7 @@
 
-#ifndef CORING_CONFIG_HPP
-#define CORING_CONFIG_HPP
+#ifndef CORING_CONFIG_IO_HPP
+#define CORING_CONFIG_IO_HPP
 namespace coring {
-constexpr int CQ_POLLING_TIMEOUT_MS = 2000;
+constexpr int CQ_POLLING_TIMEOUT_MS = 5000;
 }
-#endif  // CORING_CONFIG_HPP
+#endif  // CORING_CONFIG_IO_HPP

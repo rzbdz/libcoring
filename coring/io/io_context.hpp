@@ -108,8 +108,9 @@ class io_uring_context : noncopyable {
   virtual ~io_uring_context() noexcept { io_uring_queue_exit(&ring); }
 
  public:
-  void wait_for_completions() {
-    io_uring_submit_and_wait(&ring, 1);
+  inline void wait_for_completions(int min_c = 1) { io_uring_submit_and_wait(&ring, min_c); }
+
+  void handle_completions() {
     io_uring_cqe *cqe;
     unsigned head;
 
@@ -124,33 +125,9 @@ class io_uring_context : noncopyable {
     cqe_count = 0;
   }
 
-  void polling_for_completions(uint64_t wait_for_ms) {
-    // we don't submit during fast polling, make sure kernel side is in SQPOLL mode
-    io_uring_submit_and_wait(&ring, 1);
-    io_uring_cqe *cqe;
-    unsigned head;
-    loop_timer timer;
-    for (;;) {
-      // I am going to test it...
-      io_uring_for_each_cqe(&ring, head, cqe) {
-        ++cqe_count;
-        auto coro = static_cast<io_token *>(io_uring_cqe_get_data(cqe));
-        // support the timeout enter, if we have kernel support EXT_ARG
-        // then this would be unnecessary
-        if (coro != nullptr && coro != reinterpret_cast<void *>(LIBURING_UDATA_TIMEOUT)) coro->resolve(cqe->res);
-      }
-      io_uring_cq_advance(&ring, cqe_count);
-      cqe_count = 0;
-      if (timer.ms_passed() >= wait_for_ms) {
-        // after this break, we go back to next call of this function
-        // and a submission is called, it's fine we just break here.
-        break;
-      }
-      // make sure we wake up the sq-thread if necessary
-      // TODO: we don't know if we do provide new sqe to be consumed
-      // so this could wake up the sq-thread and waste up CPU cycles.
-      io_uring_submit(&ring);
-    }
+  inline void wait_for_completions_then_handle() {
+    wait_for_completions();
+    handle_completions();
   }
 
  public:
@@ -733,6 +710,19 @@ class io_context : public coring::detail::io_uring_context {
     init();
   }
 
+  /// stupid name, only for dev channel...
+  /// \return a io_context isntance.
+  static inline io_context dup_from_big_brother(io_context *bro, int entries = 64) {
+    auto fl = bro->ring.flags;
+    if (fl & IORING_SETUP_SQPOLL) {
+      // You can only get real entries from ring->sz or the para when you init one ,we just pass in one...
+      // RVO should work here.
+      return io_context{entries, fl | IORING_SETUP_ATTACH_WQ, static_cast<uint32_t>(bro->ring_fd())};
+    } else {
+      return io_context{entries, fl};
+    }
+  }
+
   io_context(int entries, io_uring_params p) : detail::io_uring_context{entries, p} { init(); }
 
   io_context(int entries, io_uring_params *p) : detail::io_uring_context{entries, p} { init(); }
@@ -802,7 +792,6 @@ class io_context : public coring::detail::io_uring_context {
       // some blocking task...
       execute(std::move(t));
     }
-    // local_copy.clear();
   }
 
   // TODO: I won't deal with cancellation now...(2)
@@ -857,22 +846,26 @@ class io_context : public coring::detail::io_uring_context {
   /// Immediate issue a one-way-task to run the awaitable.
   /// Make sure you are in the current thread (or, inside of a coroutine running on the io_context).
   /// check io_context::spawn(...).
-  /// \tparam AWAITABLE
-  /// \param awaitable
-  template <typename AWAITABLE>
-  void execute(AWAITABLE &&awaitable) {
+  void execute(my_task_t &&awaitable) {
     // now it was call inside of the wait_for_completion,
     // so it would be submitted soon (at next round of run)
-    my_scope_.spawn(std::forward<AWAITABLE>(awaitable));
+    my_scope_.spawn(std::move(awaitable));
   }
 
   /// Just don't use this, check io_context::spawn(...).
-  /// \tparam AWAITABLE
-  /// \param awaitable
-  template <typename AWAITABLE>
-  void schedule(AWAITABLE &&awaitable) {
+  void schedule(my_task_t &&awaitable) {
     std::lock_guard lk(mutex_);
-    todo_list_.emplace_back(std::forward<AWAITABLE>(awaitable));
+    todo_list_.emplace_back(std::move(awaitable));
+  }
+
+  void schedule(std::vector<my_task_t> &task_list) {
+    std::lock_guard lk(mutex_);
+    if (todo_list_.empty()) {
+      std::swap(todo_list_, task_list);
+    } else {
+      std::move(task_list.begin(), task_list.end(), std::back_inserter(todo_list_));
+      task_list.clear();
+    }
   }
   /// set timeout
   /// \tparam AWAITABLE
@@ -891,7 +884,7 @@ class io_context : public coring::detail::io_uring_context {
 
   void wakeup() { notify(EV_WAKEUP_MSG); }
 
-  void submit() { wakeup(); }
+  inline void submit() { wakeup(); }
 
   /// Spawn a task on current event loop
   ///
@@ -926,23 +919,21 @@ class io_context : public coring::detail::io_uring_context {
   /// we can take a leap on that.
   /// in case you need it: https://doc.dpdk.org/guides/prog_guide/ring_lib.html
   ///
-  /// \tparam AWAITABLE basically task<>, or something else that could be awaited and returns void.
   /// \tparam thread_check if your task contains a io_uring_context related procedure, and the io_context you
   ///                      use may not running on the current thread
   /// \param awaitable a task, must be void return such as task<>
-  template <bool thread_check = false, typename AWAITABLE,
-            typename = std::enable_if_t<std::is_void_v<typename coring::awaitable_traits<AWAITABLE>::await_result_t>>>
-  void inline spawn(AWAITABLE &&awaitable) {
+  template <bool thread_check = false>
+  void inline spawn(my_task_t &&awaitable) {
     if constexpr (thread_check) {
       if (on_this_thread()) {
-        execute(std::forward<AWAITABLE>(awaitable));
+        execute(std::move(awaitable));
       } else {
-        schedule(std::forward<AWAITABLE>(awaitable));
+        schedule(std::move(awaitable));
         // TODO: too many system calls if too many spawn (with thread checking), right now just use spawn<false>.
         wakeup();
       }
     } else {
-      execute(std::forward<AWAITABLE>(awaitable));
+      execute(std::move(awaitable));
     }
   }
 
@@ -965,22 +956,13 @@ class io_context : public coring::detail::io_uring_context {
     // do scheduled tasks
     do_todo_list();
     init_timeout_callback();
-    if (ring.flags & IORING_SETUP_SQPOLL) {
-      while (!stopped_) {
-        // the coroutine would be resumed inside io_token.resolve() method
-        // blocking syscall. Call io_uring_submit_and_wait.
-        polling_for_completions(CQ_POLLING_TIMEOUT_MS);
-        do_todo_list();
-      }
-    } else {
-      while (!stopped_) {
-        // the coroutine would be resumed inside io_token.resolve() method
-        // blocking syscall. Call io_uring_submit_and_wait.
-        wait_for_completions();
-        do_todo_list();
-      }
+    while (!stopped_) {
+      // the coroutine would be resumed inside io_token.resolve() method
+      // blocking syscall. Call io_uring_submit_and_wait.
+      wait_for_completions_then_handle();
+      do_todo_list();
     }
-    // TODO: handle stop event, deal with async_scope (issue cancellations then call join)
+    // TODO: handle stop event, deal with async_scope (issue cancellations then call join) exiting
   }
 
  public:
@@ -1010,8 +992,6 @@ class io_context : public coring::detail::io_uring_context {
   // io_uring_context engine inherited from uio
   // a event fd for many uses
   int internal_event_fd_{-1};
-  // for eventfd wakeup demux
-  int flag_{0};
   std::mutex mutex_;
   // no volatile for all changes are made in the same thread
   // not using stop_token for better performance.
@@ -1044,7 +1024,7 @@ struct coro {
   }
   /// Just make sure you are in a coroutine before calling this,
   /// it's not the same spawn as the one in boost::asio.
-  static void spawn(task<> &&t) { get_io_context_ref().schedule(std::move(t)); }
+  static void spawn(task<> &&t) { get_io_context_ref().spawn(std::move(t)); }
 };
 }  // namespace coring
 

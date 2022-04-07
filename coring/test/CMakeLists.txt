@@ -28,11 +28,11 @@ target_link_libraries(
 add_executable(async_log_test async_logger_test.cpp)
 target_link_libraries(async_log_test logging)
 # simple usage/demo/tests
-add_executable(onepage_webserver onepage_webserver.cpp)
-target_link_libraries(onepage_webserver uring logging coring_net)
-TARGET_LINK_LIBRARIES(onepage_webserver ${CMAKE_THREAD_LIBS_INIT})
+add_executable(single_server single_server.cpp)
+target_link_libraries(single_server uring logging coring_net)
+TARGET_LINK_LIBRARIES(single_server ${CMAKE_THREAD_LIBS_INIT})
 # simple usage/demo/tests
-add_executable(threaded_server revised_singlepage_webserver.cpp)
+add_executable(threaded_server threaded_server.cpp)
 target_link_libraries(threaded_server uring logging coring_net)
 TARGET_LINK_LIBRARIES(threaded_server ${CMAKE_THREAD_LIBS_INIT})
 # simple usage/demo/tests

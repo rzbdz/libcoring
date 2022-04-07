@@ -14,11 +14,11 @@ using nanoseconds = std::chrono::nanoseconds;
 using microseconds = std::chrono::microseconds;
 using system_clock = std::chrono::system_clock;
 // use --gtest_filter=''
-TEST(Run, EventfdStop) {
+TEST(Run, OutThreadStop) {
   io_context ctx;
   std::jthread t1([&ctx] {
     // LDR("test! %d\n go to sleep(5)", 12);
-    sleep(5);
+    sleep(2);
     // LDR("sleep end, invoke stop");
     ctx.stop();
   });
@@ -28,7 +28,19 @@ TEST(Run, EventfdStop) {
   // an inf loop...
   // Not loop inf would be considered passed...
 }
-
+TEST(Run, InThreadStop) {
+  io_context ctx;
+  ctx.schedule([](io_context *ioc) -> task<> {
+    using namespace std::chrono_literals;
+    co_await ioc->timeout(5s);
+    ioc->stop();
+  }(&ctx));
+  // LDR("before run in main");
+  ctx.run();
+  // LDR("after run in main");
+  // an inf loop...
+  // Not loop inf would be considered passed...
+}
 task<> sleep_for(std::chrono::microseconds t) {
   auto stamp_before = std::chrono::duration_cast<microseconds>(system_clock::now().time_since_epoch());
   co_await timeout(t);
@@ -216,7 +228,7 @@ task<> sleep_for_accurate(std::chrono::microseconds t) {
     EXPECT_LE(static_cast<double>(std::abs(ti - pass)) / ti, 0.1);
   }
 }
-TEST(DirectTimeout, ChronoTimeout) {
+TEST(Timeout, DirectTimeout) {
   io_context ctx;
   auto exec = ctx.as_executor();
   using namespace std::chrono_literals;
