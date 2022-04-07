@@ -23,9 +23,11 @@ enum log_level {
   LOG_LEVEL_CNT,
 };
 // bugs when use constexpr!
-constexpr log_level LOG_LEVEL = INFO;
+extern log_level LOG_LEVEL;
 
-constexpr bool SHOULD_EMIT(const log_level exp) {
+inline void set_log_level(log_level l) { LOG_LEVEL = l; }
+
+inline bool SHOULD_EMIT(log_level exp) {
   if (exp >= LOG_LEVEL) {
     return true;
   } else {
@@ -109,7 +111,7 @@ class logger {
   static submit_interface submitter_;
 };
 #define _LOG_GEN_(level, fmt, ...)                                          \
-  if constexpr (SHOULD_EMIT(level)) {                                       \
+  if (SHOULD_EMIT(level)) {                                                 \
     coring::logger(__FILE__, __LINE__, level).log(fmt "\n", ##__VA_ARGS__); \
   } else
 
