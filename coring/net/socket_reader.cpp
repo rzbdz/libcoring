@@ -1,10 +1,19 @@
 #include "socket_reader.hpp"
+#include "config.hpp"
 #ifndef CORING_NO_EXTRA_THREAD_BUFFER
 thread_local char coring::socket_reader::extra_buffer_[65536];
 #endif
-coring::task<int> coring::socket_reader::sync_from_socket() {
-  auto &ctx = coro::get_io_context_ref();
+void handle_read_error(int ret_code) {
+  if (ret_code == 0) {
+    throw std::runtime_error("socket may be closed, encounter EOF");
+  }
+  if (ret_code < 0 && ret_code != -EINTR) {
+    throw std::system_error(std::error_code{-ret_code, std::system_category()});
+  }
+}
+coring::task<> coring::socket_reader::read_some() {
 #ifndef CORING_NO_EXTRA_THREAD_BUFFER
+  auto &ctx = coro::get_io_context_ref();
   // I don't really want to keep this...
   // reduce syscalls caused by insufficient buffer writable size.
   char *borrow = extra_buffer_;
@@ -29,6 +38,10 @@ coring::task<int> coring::socket_reader::sync_from_socket() {
   }
   co_return n;
 #else
-  co_return co_await ctx.read(fd_, back(), writable(), 0);
+  // use recv instead of read benefits from internal poll/epoll mechanism (maybe)
+  upper_layer_.make_room(CORING_READ_BUFFER_AT_LEAST_WRITABLE);
+  int ret = co_await coro::get_io_context_ref().recv(fd_, (void *)upper_layer_.front(), upper_layer_.writable(), 0);
+  handle_read_error(ret);
+  upper_layer_.push_back(ret);
 #endif
 }

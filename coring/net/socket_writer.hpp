@@ -23,16 +23,25 @@ class socket_writer_base {
     static_assert(std::is_constructible_v<UpperType, Args...>);
   }
 
+ private:
+  void handle_write_error(int ret_code) {
+    if (ret_code == 0) {
+      throw std::runtime_error("socket may be closed, encounter EOF");
+    }
+    if (ret_code < 0 && ret_code != -EINTR) {
+      throw std::system_error(std::error_code{-ret_code, std::system_category()});
+    }
+  }
+
  public:
   /// just one write.
   /// \param
   /// \return
   [[nodiscard]] task<int> write_to_file() {
     auto &ctx = coro::get_io_context_ref();
-    auto n = co_await ctx.write(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-    if (n <= 0 && n != -EINTR) {
-      throw std::runtime_error("socket closed or sth happened trying to write");
-    }
+    // use send instead of read benefits from internal poll/epoll mechanism (maybe)
+    auto n = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
+    handle_write_error(n);
     upper_layer_.pop_front(n);
     co_return n;
   }
@@ -43,10 +52,9 @@ class socket_writer_base {
     size_t n = upper_layer_.readable();
     auto &ctx = coro::get_io_context_ref();
     while (n != 0) {
-      auto writed = co_await ctx.write(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-      if (writed <= 0 && writed != -EINTR) {
-        throw std::runtime_error("socket closed or sth happened trying to write");
-      }
+      // use send instead of read benefits from internal poll/epoll mechanism (maybe)
+      auto writed = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
+      handle_write_error(writed);
       upper_layer_.pop_front(writed);
       n -= writed;
     }
