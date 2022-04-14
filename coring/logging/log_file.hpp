@@ -13,7 +13,6 @@ class log_file {
  public:
   log_file(std::string name = "coring", off_t roll_size = k_file_roll_size)
       : name_{std::move(name)}, roll_size_{roll_size} {
-    //
     roll_file();
   }
   void roll_file() {
@@ -45,5 +44,18 @@ class log_file {
   std::ofstream os_;
 };
 }  // namespace coring
-
+class log_stdout {
+ public:
+  log_stdout(const std::string &name = "coring", off_t roll_size = 0) {
+    char buf[] = "Async Logger started, using stdout as output, log name: ";
+    fwrite(buf, 1, sizeof(buf), stdout);
+    fwrite(name.c_str(), 1, name.size(), stdout);
+    fwrite("\n", 1, 1, stdout);
+  }
+  void roll_file() {
+    // do nothing...
+  }
+  void append(char *data, std::streamsize len) { fwrite(data, 1, len, stdout); }
+  void force_flush() { fflush(stdout); }
+};
 #endif  // CORING_LOG_FILE_HPP

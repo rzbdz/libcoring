@@ -5,7 +5,7 @@
 #include <thread>
 #include <iostream>
 using namespace coring;
-constexpr char request_get[] =
+char request_get[] =
     "GET / HTTP/1.0\r\n"
     "Host:www.baidu.com\r\n"
     "\r\n";
@@ -20,8 +20,8 @@ task<> short_read() {
     co_await t.write_all_to_file();
     int ret = co_await coro::get_io_context_ref().read(con, buf, 64 * 1024, 0);
     std::cout << "I have read: " << ret << " bytes" << buf << std::endl;
-    con.shutdown();
-    con.close();
+    co_await con.shutdown();
+    co_await con.close();
   } catch (std::exception &e) {
     std::cout << "inside short read: " << e.what() << std::endl;
   }

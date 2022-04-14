@@ -21,6 +21,8 @@
 #include <execinfo.h>
 #endif
 
+#include "coring/coring_config.hpp"
+
 #include "coring/utils/noncopyable.hpp"
 #include "coring/utils/debug.hpp"
 #include "coring/utils/thread.hpp"
@@ -36,7 +38,6 @@
 
 #include "io_awaitable.hpp"
 #include "timer.hpp"
-#include "config.hpp"
 
 namespace coring {
 namespace detail {
@@ -119,7 +120,8 @@ class io_uring_context : noncopyable {
       auto coro = static_cast<io_token *>(io_uring_cqe_get_data(cqe));
       // support the timeout enter, if we have kernel support EXT_ARG
       // then this would be unnecessary
-      if (coro != nullptr && coro != reinterpret_cast<void *>(LIBURING_UDATA_TIMEOUT)) coro->resolve(cqe->res);
+      if (coro != nullptr && coro != reinterpret_cast<void *>(LIBURING_UDATA_TIMEOUT))
+        coro->resolve(cqe->res, cqe->flags);
     }
     io_uring_cq_advance(&ring, cqe_count);
     cqe_count = 0;
@@ -143,7 +145,6 @@ class io_uring_context : noncopyable {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_link_timeout(sqe, ts, flags);
     io_uring_sqe_set_flags(sqe, iflags);
-    io_uring_sqe_set_data(sqe, nullptr);
   }
   /**
    * A helper method
@@ -159,7 +160,6 @@ class io_uring_context : noncopyable {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_link_timeout(sqe, ts, flags);
     io_uring_sqe_set_flags(sqe, iflags);
-    io_uring_sqe_set_data(sqe, nullptr);
     return async_op;
   }
   /**
@@ -263,6 +263,20 @@ class io_uring_context : noncopyable {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_write_fixed(sqe, fd, buf, nbytes, offset, buf_index);
     return make_awaitable(sqe, iflags);
+  }
+
+  /** Read from a file descriptor at a given offset using IOSQE_BUFFER_SELECT
+   * @see man 2 pread, https://manpages.debian.org/unstable/liburing-dev/io_uring_enter.2.en.html#IOSQE_BUFFER_SELECT
+   * @see io_uring_enter(2) IORING_OP_READ, IOSQE_BUFFER_SELECT
+   * @param iflags IOSQE_* flags
+   * @return a task object for awaiting, result is the bid or <=0 as error occurs.
+   */
+  io_awaitable_res_flag read_buffer_select(int fd, __u16 gid, unsigned nbytes, off_t offset = 0, uint8_t iflags = 0) {
+    iflags |= IOSQE_BUFFER_SELECT;
+    auto *sqe = io_uring_get_sqe_safe();
+    io_uring_prep_read(sqe, fd, nullptr, nbytes, offset);
+    sqe->buf_group = gid;
+    return make_awaitable_res_flag(sqe, iflags);
   }
 
   /** Synchronize a file's in-core state with storage device asynchronously
@@ -592,10 +606,10 @@ class io_uring_context : noncopyable {
    * @param iflags just for IOSQE_* flags like LINK option
    * @return we need a task since this is a async operation, it's not like register_buffer.
    */
-  io_awaitable provide_buffers(void *addr, int len_buffer, int how_many, int group_id, int first_bid,
+  io_awaitable provide_buffers(void *addr, int len_buffer, int how_many, __u16 group_id, __u16 first_bid,
                                uint8_t iflags = 0) {
     auto *sqe = io_uring_get_sqe_safe();
-    io_uring_prep_provide_buffers(sqe, addr, len_buffer, how_many, group_id, first_bid);
+    io_uring_prep_provide_buffers(sqe, addr, len_buffer, how_many, (int)group_id, (int)first_bid);
     return make_awaitable(sqe, iflags);
   }
 
@@ -603,6 +617,16 @@ class io_uring_context : noncopyable {
   io_awaitable make_awaitable(io_uring_sqe *sqe, uint8_t iflags) noexcept {
     io_uring_sqe_set_flags(sqe, iflags);
     return io_awaitable(sqe);
+  }
+
+  io_awaitable_flag make_awaitable_flag(io_uring_sqe *sqe, uint8_t iflags) noexcept {
+    io_uring_sqe_set_flags(sqe, iflags);
+    return io_awaitable_flag(sqe);
+  }
+
+  io_awaitable_res_flag make_awaitable_res_flag(io_uring_sqe *sqe, uint8_t iflags) noexcept {
+    io_uring_sqe_set_flags(sqe, iflags);
+    return io_awaitable_res_flag(sqe);
   }
 
  public:

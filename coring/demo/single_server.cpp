@@ -1,23 +1,15 @@
-// please don' t use valgrind to check memory leak.
-// the io_uring syscall isn't be handled, thus induce crashes.
-// I am new to http, just mark sth should be remembered here.
-// How the http server know when to end a POST request reading
-// need a state machine to parse the content.
-// Say we have a json content or form content, just read
-// until the text are well-formed.
-// For example, when we have a form-data without content length,
-// It can be coordinated or use content-length etc.
-// If there is no content-length, bad story...
-// Actually I should do benchmarks compare different server, like epoll
-// and boost asio, I will do that after the whole picture
-// settle down and bugs get fixed.
+/// please don' t use valgrind to check memory leak.
+/// the io_uring syscall isn't be handled, thus induce crashes.
+/// HTTP parsing would be written (or just modify from exiting projects) later.
+/// this file is only for simple testings usage using apache benchmark or webbench
 #include "coring/net/acceptor.hpp"
 #include "coring/net/socket_duplexer.hpp"
 #include "coring/io/timeout.hpp"
+#include "coring/net/buffer_pool.hpp"
 #include <iostream>
 using namespace coring;
 // hello-world for benchmark
-constexpr char response200[] =
+char response200[] =
     "HTTP/1.0 200\r\n"
     "Content-type: text/html\r\n"
     "\r\n"
@@ -33,10 +25,12 @@ constexpr char response200[] =
 
 task<> send_200_then_quit(tcp::connection conn) {
   try {
-    auto wrapper = socket_reader(conn, 2048);
+    auto reader = socket_reader(conn, 2048);
     //    [[maybe_unused]] auto str = co_await wrapper.read_till_2crlf();
-    co_await wrapper.read_some();
-    co_await socket_writer(conn, response200).write_all_to_file();
+    co_await reader.read_some();
+    auto writer = socket_writer(conn, response200);
+    writer.raw_buffer().push_back(sizeof(response200));
+    co_await writer.write_all_to_file();
   } catch (std::exception &e) {
     std::cout << "inside read " << e.what() << std::endl;
   }
@@ -45,7 +39,6 @@ task<> send_200_then_quit(tcp::connection conn) {
   // co_await conn.shutdown();
   // ::close(conn);
   co_await conn.close();
-  // ::close(conn);
 }
 task<> acceptor(std::stop_token tk, tcp::acceptor &act) {
   int how_many = 0;

@@ -11,17 +11,15 @@
 
 namespace coring {
 
-class socket_duplexer : public socket_reader, public flex_socket_writer {
+class socket_duplexer : public flex_socket_reader, public flex_socket_writer {
  public:
-  explicit socket_duplexer(socket fd, size_t sz = buffer::default_size)
-      : socket_reader{fd, sz}, flex_socket_writer{fd, sz} {}
-  explicit socket_duplexer(socket read_fd, socket write_fd, size_t sz = buffer::default_size)
-      : socket_reader{read_fd, sz}, flex_socket_writer{write_fd, sz} {}
-  explicit socket_duplexer(socket read_fd, socket write_fd, size_t rdsz = buffer::default_size,
-                           size_t wrsz = buffer::default_size)
-      : socket_reader{read_fd, rdsz}, flex_socket_writer{write_fd, wrsz} {}
-  explicit socket_duplexer(socket read_fd, socket write_fd, buffer &&rd_buffer, buffer &&wr_buffer)
-      : socket_reader{read_fd, std::move(rd_buffer)}, flex_socket_writer{write_fd, std::move(wr_buffer)} {}
+  explicit socket_duplexer(socket fd, int sz = buffer::default_size)
+      : flex_socket_reader{fd, sz}, flex_socket_writer{fd, sz} {}
+  explicit socket_duplexer(socket read_fd, socket write_fd, int sz = buffer::default_size)
+      : flex_socket_reader{read_fd, sz}, flex_socket_writer{write_fd, sz} {}
+  explicit socket_duplexer(socket read_fd, socket write_fd, int rdsz = buffer::default_size,
+                           int wrsz = buffer::default_size)
+      : flex_socket_reader{read_fd, rdsz}, flex_socket_writer{write_fd, wrsz} {}
 };
 }  // namespace coring
 

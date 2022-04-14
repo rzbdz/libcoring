@@ -7,13 +7,9 @@
 #include "coring/utils/buffer.hpp"
 #include "coring/async/task.hpp"
 #include "coring/io/io_context.hpp"
+#include "coring/net/buffer_pool.hpp"
 #include "socket.hpp"
 namespace coring {
-/// TODO: I am sad that the constructing ways of the socket_reader and socket_writer
-/// are widely different.
-/// I should make socket_reader support different buffer too,
-/// also don't use the awkward function constructor that need
-/// to be written manually...
 /// \tparam UpperType the buffer type
 template <typename UpperType = buffer>
 class socket_writer_base {
@@ -52,7 +48,7 @@ class socket_writer_base {
     size_t n = upper_layer_.readable();
     auto &ctx = coro::get_io_context_ref();
     while (n != 0) {
-      // use send instead of read benefits from internal poll/epoll mechanism (maybe)
+      // LOG_TRACE("co await send");
       auto writed = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
       handle_write_error(writed);
       upper_layer_.pop_front(writed);
@@ -63,24 +59,24 @@ class socket_writer_base {
 
   task<> write_certain_incrementally(const char *place, size_t nbytes) {
     static_assert(std::is_same_v<UpperType, buffer>);
-    upper_layer_.push_back(place, nbytes);
+    upper_layer_.emplace_back(place, nbytes);
     co_await write_to_file();
   }
   task<> write_certain_loosely(const char *place, size_t nbytes) {
     static_assert(std::is_same_v<UpperType, buffer>);
-    upper_layer_.push_back(place, nbytes);
+    upper_layer_.emplace_back(place, nbytes);
     if (upper_layer_.readable() >= 64 * 1024) {
       co_await write_to_file();
     }
   }
 
   task<> write_certain_strictly(const char *place, size_t nbytes) {
-    upper_layer_.push_back(place, nbytes);
+    upper_layer_.emplace_back(place, nbytes);
     co_await write_all_to_file();
   }
 
   task<> write_certain(const char *place, size_t nbytes) {
-    upper_layer_.push_back(place, nbytes);
+    upper_layer_.emplace_back(place, nbytes);
     co_await write_to_file();
   }
   UpperType &raw_buffer() { return upper_layer_; }
@@ -93,10 +89,11 @@ class socket_writer_base {
 /// I don't know if there are other approach.
 /// \return a buffered io, recommended using auto
 template <typename... Args>
-requires std::is_constructible_v<const_buffer, Args...>
+requires std::is_constructible_v<fixed_buffer, Args...>
 inline auto socket_writer(socket so, Args &&...args) {
-  return socket_writer_base<const_buffer>{so, std::forward<Args>(args)...};
+  return socket_writer_base<fixed_buffer>{so, std::forward<Args>(args)...};
 }
+
 /// wrap a socket with a buffer...
 /// I don't know if there are other approach.
 /// \return a buffered io, recommended using auto
@@ -105,7 +102,16 @@ requires std::is_constructible_v<flex_buffer, Args...>
 inline auto socket_writer(socket so, Args &&...args) {
   return socket_writer_base<flex_buffer>{so, std::forward<Args>(args)...};
 }
-typedef socket_writer_base<const_buffer> const_socket_writer;
+/// TODO: bad abstraction
+/// \param so
+/// \param buffer
+/// \return a stateful buffered
+inline auto socket_writer(socket so, selected_buffer &buffer) {
+  auto ret = socket_writer_base<fixed_buffer>{so, buffer.data(), buffer.capacity()};
+  ret.raw_buffer().push_back(buffer.readable());
+  return ret;
+}
+typedef socket_writer_base<fixed_buffer> fixed_socket_writer;
 typedef socket_writer_base<flex_buffer> flex_socket_writer;
 
 }  // namespace coring

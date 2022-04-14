@@ -25,6 +25,7 @@
 #include <thread>
 #include <functional>
 
+#include "coring/coring_config.hpp"
 #include "coring/logging/fmt/format.h"
 #include "coring/utils/noncopyable.hpp"
 #include "logging.hpp"
@@ -46,9 +47,9 @@ class async_logger : noncopyable {
   typedef std::unique_ptr<log_buffer_t> log_buffer_ptr;
   // TODO: use a thread_local pool to dispatch buffer per pool
   // but that brings too much coupling between threading and logger
-  static constexpr size_t k_max_buffer = 1000 * 4000;
-  static constexpr size_t suggested_single_log_max_len = 500;
-  static constexpr size_t ring_buffer_size = 8192;
+  static constexpr size_t k_max_buffer = ASYNC_LOGGER_MAX_BUFFER;
+  static constexpr size_t suggested_single_log_max_len = ASYNC_LOGGER_MAX_MESSAGE;
+  static constexpr size_t ring_buffer_size = ASYNC_LOGGER_RING_BUFFER_SZ;
 
  public:
   explicit async_logger(std::string file_name = "", off_t roll_size = k_file_roll_size, int flush_interval = 3);
@@ -151,7 +152,11 @@ class async_logger : noncopyable {
   }
 
  private:
+#ifdef CORING_ASYNC_LOGGER_STDOUT
+  log_stdout output_file_;
+#else
   log_file output_file_;
+#endif
 };
 
 }  // namespace coring::detail

@@ -22,6 +22,10 @@ class socket : public file_descriptor {
   net::endpoint local_endpoint();
   net::endpoint peer_endpoint();
 
+  detail::io_awaitable read_some(char *dst, size_t nbytes) {
+    return coro::get_io_context_ref().recv(fd_, (void *)dst, (unsigned)nbytes, 0);
+  }
+
   bool is_self_connect();
   void setsockopt(int level, int optname, const void *optval, socklen_t optlen);
 

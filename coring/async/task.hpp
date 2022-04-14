@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <cassert>
 #include <coroutine>
+#include "coring/logging/logging.hpp"
 #include "broken_promise.hpp"
 #include "coring/async/detail/remove_rvalue_reference.hpp"
 #include "coring/async/awaitable_traits.hpp"
@@ -225,6 +226,7 @@ class [[nodiscard]] task {
   /// Frees resources used by this task.
   ~task() {
     if (my_continuation_) {
+      // LOG_TRACE("task destruct, address: {}", my_continuation_.address());
       my_continuation_.destroy();
     }
   }
