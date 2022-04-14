@@ -1,6 +1,5 @@
-libcoring is a C++ network library in Proactor pattern (@see: POSA2), and it is based on the new io_uring
-syscall of linux and coroutine in C++ 20. It's under development now, the progress could be viewed in Github project
-page.
+libcoring is a C++ network library in Proactor pattern (@see: POSA2), and it is based on the new io_uring syscall of
+linux and coroutine in C++ 20. It's under development now, the progress could be viewed in Github project page.
 ---
 
 ## Getting started
@@ -17,7 +16,7 @@ page.
 ### Techniques and Features:
 
 - logging: deferred formatting, and use a spsc lock-free queue per thread, detailed information is available
-  in [DEVLOG.md](./DEVLOG.md). The submit latency is less than 1us in wsl2, 0.5us on 1GHz 2GB ram machine. More regular
+  in [this file](./design.md). The submit latency is less than 1us in wsl2, 0.5us on 1GHz 2GB ram machine. More regular
   benchmarks would be done.
 - io_context: use io_uring interfaces, and support both polling (since the queue is lock-free and mmapped) and interrupt
   mode (It doesn't mean IO_POLL or SQ Polling of io_uring, but they would be supported too).
@@ -61,13 +60,13 @@ libraries in the past for linux doesn't have a good application interface while 
 the **I/O Completion Port** interface in usability and performance together with **await/async** coroutine (Task)
 concept in C#.
 
-However, with the new `io_uring` interfaces introduced in linux kernel 5 and the new compiler level
-implementation of coroutine in C++20, things begin will change.
+However, with the new `io_uring` interfaces introduced in linux kernel 5 and the new compiler level implementation of
+coroutine in C++20, things begin will change.
 
 ### Boost::asio
 
-Boost::asio do support `io_uring` and coroutine for C++20 now (C++17 TS demo). This project would learn from
-asio as well. There is no other reasons not using boost::asio.
+Boost::asio do support `io_uring` and coroutine for C++20 now (C++17 TS demo). This project would learn from asio as
+well. There is no other reasons not using boost::asio.
 
 For now, this **libcoring** library would only be a (simple toy level when it's under development) new (using C++20 and
 linux kernel 5.6 api) and lightweight linux-only project, who need not deal with old version compatibility problem and
@@ -110,8 +109,7 @@ support
 
 Since the formatting would require two memory buffers, one for messages from front-end, one for formatted logs. This
 implementation doesn't use double buffer, instead it uses a simple on stack buffer, for simple application it should be
-enough. Alternatives like using mmap or io_uring (async io would use techs like DMA) would be taken into
-consideration.
+enough. Alternatives like using mmap or io_uring (async io would use techs like DMA) would be taken into consideration.
 
 The results only be better(equal in else cases) when the front-end is not busy logging and the log string is not very
 simple (for example:
@@ -128,10 +126,10 @@ multiple digits combined with string formatting), the latency of front end is st
 
 ## Notice:
 
-... From now on, I won't update the DEVLOG.md file on the fly.
+... From now on, I won't update this file on the fly.
 
 The project is still under development, and README.md would be updated as soon as new information is available. Beyond
-DEVLOG.md and REAME.md, other useful descriptions of how the codes are organized and designed are available in the
+docs directory and README.md, other useful descriptions of how the codes are organized and designed are available in the
 **commit log** before and future. I might update a description of how the timer is designed in the future. I have also
 written some posts in Chinese to show the points that are needed to write such a 'toy' (but I won't keep it as only a
 toy) project, and I might translate them into English later to improve my English writing skill later.
