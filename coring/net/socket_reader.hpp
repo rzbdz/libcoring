@@ -1,35 +1,38 @@
 
 #ifndef CORING_SOCKET_READER_HPP
 #define CORING_SOCKET_READER_HPP
-#define CORING_NO_EXTRA_THREAD_BUFFER
 #include <coroutine>
 #include <cstddef>
+#include "coring/coring_config.hpp"
 #include "file_descriptor.hpp"
 #include "coring/utils/buffer.hpp"
 #include "coring/async/task.hpp"
 #include "coring/io/io_context.hpp"
 #include "socket.hpp"
-#include "config.hpp"
-namespace coring {  /// This class is a wrapper supporting io_context
+namespace coring {
+/// This class is a wrapper supporting io_context
 /// for char vector based buffer. (just like a decorator)
-/// TODO: not a good design for different buffers...
-/// But the interfaces is not simple to design.
-/// TODO: I am sad that the constructing ways of the socket_reader and socket_writer
 /// are widely different.
 /// I should make socket_reader support different buffer too,
 /// also don't use the awkward function constructor that need
 /// to be written manually...
-class socket_reader {
+template <typename UpperType = buffer>
+class socket_reader_base {
  public:
-  explicit socket_reader(socket fd, size_t sz = CORING_READ_BUFFER_SIZE_DEFAULT) : fd_{fd}, upper_layer_{sz} {}
-  explicit socket_reader(socket fd, buffer &&container) : fd_{fd}, upper_layer_{std::move(container)} {}
+  template <typename... Args>
+  explicit socket_reader_base(socket fd, Args &&...args) : fd_{fd}, upper_layer_{std::forward<Args>(args)...} {
+    static_assert(std::is_constructible_v<UpperType, Args...>);
+  }
 
  private:
-#ifndef CORING_NO_EXTRA_THREAD_BUFFER
-  // TODO: add support for dynamic allocation.
-  // TODO: add support for read_fixed,write_fixed
-  static thread_local char extra_buffer_[65536];
-#endif
+  static void handle_read_error(int ret_code) {
+    if (ret_code == 0) {
+      throw std::runtime_error("socket may be closed, encounter EOF");
+    }
+    if (ret_code < 0 && ret_code != -EINTR) {
+      throw std::system_error(std::error_code{-ret_code, std::system_category()});
+    }
+  }
 
  public:
   /// I think it should be same as 'read_all_from_file'
@@ -37,7 +40,12 @@ class socket_reader {
   /// But when it comes to the long-fat one, it won't be the same.
   /// \param
   /// \return
-  [[nodiscard]] task<> read_some();
+  [[nodiscard]] task<> read_some() {
+    upper_layer_.make_room(READ_BUFFER_AT_LEAST_WRITABLE);
+    int ret = co_await fd_.read_some(upper_layer_.back(), upper_layer_.writable());
+    handle_read_error(ret);
+    upper_layer_.push_back(ret);
+  }
 
   /// read certain bytes. I don't think we need a read_some method
   /// since you can always go and use the raw buffer methods like front()
@@ -178,8 +186,27 @@ class socket_reader {
 
  private:
   socket fd_;
-  buffer upper_layer_;
+  UpperType upper_layer_;
 };
+
+/// wrap a socket with a buffer...
+/// I don't know if there are other approach.
+/// \return a buffered io, recommended using auto
+template <typename... Args>
+requires std::is_constructible_v<fixed_buffer, Args...>
+inline auto socket_reader(socket so, Args &&...args) {
+  return socket_reader_base<fixed_buffer>{so, std::forward<Args>(args)...};
+}
+/// wrap a socket with a buffer...
+/// I don't know if there are other approach.
+/// \return a buffered io, recommended using auto
+template <typename... Args>
+requires std::is_constructible_v<flex_buffer, Args...>
+inline auto socket_reader(socket so, Args &&...args) {
+  return socket_reader_base<flex_buffer>{so, std::forward<Args>(args)...};
+}
+typedef socket_reader_base<fixed_buffer> fixed_socket_reader;
+typedef socket_reader_base<flex_buffer> flex_socket_reader;
 }  // namespace coring
 
 #endif  // CORING_SOCKET_READER_HPP

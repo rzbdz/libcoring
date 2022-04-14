@@ -3,7 +3,7 @@
 #include "coring/utils/thread.hpp"
 
 namespace coring {
-log_level LOG_LEVEL = INFO;
+log_level LOG_LEVEL = LOG_LEVEL_CNT;
 
 logger::submit_interface logger::submitter_;
 // this must be completed in front end
