@@ -18,98 +18,82 @@
 #include "coring/io/timeout.hpp"
 #include "coring/net/socket_writer.hpp"
 
-#define TRY_CATCH(expr)          \
-  try {                          \
-    expr                         \
-  } catch (std::exception & e) { \
-    LOG_DEBUG("{}", e.what());   \
-  }                              \
+#define catch_it_then(then)    \
+  catch (std::exception & e) { \
+    LOG_DEBUG("{}", e.what()); \
+  }                            \
+  then;                        \
   static_cast<void>(0)
-#define TRY_CATCH_R(expr)          \
-  try {                            \
-    expr                           \
-  } catch (std::exception & e) {   \
-    LOG_DEBUG_RAW("%s", e.what()); \
-  }                                \
-  static_cast<void>(0)
-//#define TRY_CATCH(expr) expr
-//#define TRY_CATCH(expr) expr
+#define do_nothing static_cast<void>(0)
 
 using namespace coring;
 
 #define MAX_CONNECTIONS 4096
-#define BACKLOG 512
 #define MAX_MESSAGE_LEN 2048
 #define BUFFERS_COUNT MAX_CONNECTIONS
 
 char buf[BUFFERS_COUNT * MAX_MESSAGE_LEN] = {0};
 
-constexpr __u16 PORT = 22415;
-buffer_pool::id_t GID{"AB"};
+buffer_pool::id_t GID("AB");
 
 struct EchoServer {
-  explicit EchoServer(__u16 port) : acceptor{"0.0.0.0", port} { acceptor.enable(); }
-
-  task<> do_echo(tcp::connection conn) {
-    int i = 0;
-    TRY_CATCH(while (true) {
-      auto &read_buffer = co_await pool.try_read_block(conn, GID, MAX_MESSAGE_LEN);
-      LOG_INFO("ith: {} read,bid: {} sz: {}", i++, read_buffer.buffer_id(), read_buffer.readable());
-      selected_buffer_resource on_scope_exit{read_buffer};
-      auto writer = socket_writer(conn, read_buffer);
-      co_await writer.write_all_to_file();
-      LOG_INFO("written");
-    });
-    // prevent async punt, only shutdown occurs, I don't know why
-    // when io_shutdown in fs/io_uring.c do handle IO_URING_F_NONBLOCK well...?
-    // co_await conn.shutdown();
-    // ::close(conn);
-    co_await conn.close();
+  EchoServer(__u16 port) : acceptor{"0.0.0.0", port} {
+    acceptor.enable();
+    LOG_INFO("echo server constructed, will be run on port: {}", port);
   }
 
-  task<> do_accept(std::stop_token token) {
-    TRY_CATCH(while (!token.stop_requested()) {
-      LOG_TRACE("co await accept");
-      auto conn = co_await acceptor.accept();
-      LOG_INFO("accepted one, spawn handler");
-      coro::spawn(do_echo(conn));
-    });
+  task<> echo_loop(tcp::connection conn) {
+    try {
+      while (true) {
+        auto &read_buffer = co_await pool.try_read_block(conn, GID, MAX_MESSAGE_LEN);
+        LOG_INFO("read,bid: {} sz: {}", read_buffer.buffer_id(), read_buffer.readable());
+        selected_buffer_resource on_scope_exit{read_buffer};
+        auto writer = socket_writer(conn, read_buffer);
+        co_await writer.write_all_to_file();
+        LOG_INFO("written");
+      }
+    }
+    catch_it_then(co_await conn.close());  // prevent async punt, just don't use co_await conn.shutdown()
+  }
+
+  task<> event_loop() {
+    co_await pool.provide_group_contiguous(buf, MAX_MESSAGE_LEN, BUFFERS_COUNT, GID);
+    try {
+      while (true) {
+        LOG_TRACE("co await accept");
+        auto conn = co_await acceptor.accept();
+        LOG_INFO("accepted one, spawn handler");
+        coro::spawn(echo_loop(conn));
+      }
+    }
+    catch_it_then(do_nothing);
   }
 
   void run() {
-    LOG_INFO("echo server, running on port: {}", PORT);
-    context.schedule(pool.provide_group_contiguous(buf, MAX_MESSAGE_LEN, BUFFERS_COUNT, GID));
-    context.schedule(do_accept(src.get_token()));
+    context.schedule(event_loop());
     context.run();
   }
 
   tcp::acceptor acceptor;
   buffer_pool pool{};
   io_context context{2048};
-  std::stop_source src{};
 };
 
 int main(int argc, char *argv[]) {
   __u16 port;
-  bool LOGGER = false;
-  if (argc > 2) {
-    LOGGER = true;
-  }
+  bool logger_on = false;
+  if (argc > 2) logger_on = true;
   if (argc > 1) {
     port = static_cast<uint16_t>(::atoi(argv[1]));
   } else {
     std::cout << "Please give a port number: ./echo_server [port: u16] [logger on: any]" << std::endl;
     exit(0);
   }
-  if (LOGGER) {
+  EchoServer server{port};
+  if (logger_on) {
     async_logger logger{"echo_server"};
-    set_log_level(INFO);
-    logger.run();
-    EchoServer server{port};
-    server.run();
-  } else {
-    EchoServer server{port};
-    server.run();
+    set_log_level(INFO);  // no logging output by default
   }
+  server.run();
   return 0;
 }
