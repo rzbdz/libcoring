@@ -13,3 +13,4 @@ recipes/
 /test/
 *.gch
 *.h.gch
+core

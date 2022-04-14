@@ -21,6 +21,12 @@ type(scope): A BRIEF LINE \n
 ```
 
 ---
+
+There are a few demos available when the development is keep going inside
+the [coring/demo](https://github.com/rzbdz/libcoring/tree/dev/coring/demo) directory, check them for the basic usages of
+this project.
+
+---
 This project learn from following library or repositories:
 
 - proactor pattern [boost.asio](https://www.boost.org/doc/libs/1_78_0/doc/html/boost_asio.html)
