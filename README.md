@@ -24,8 +24,8 @@ typically look like this:
 task<> echo_loop(tcp::connection conn){
   while(true){
     auto& selected = co_await buffer_pool.try_read_block(conn, GID, MAX_MESSAGE_LEN);
-    selected_buffer_resource return_it_when_exit(read_buffer);
-    co_await socket_writer(conn, read_buffer).write_all_to_file();
+    selected_buffer_resource return_it_when_exit(selected);
+    co_await socket_writer(conn, selected).write_all_to_file();
   }
 }
 task<> event_loop() {
@@ -52,7 +52,7 @@ task<> connect() {
   using namespace std::chrono_literals;
   auto endpoint = net::endpoint::from_resolve("www.google.com", 80);
   std::cout << endpoint.address_str() << std::endl;
-  auto conn = co_await tcp::connect_to(endpoint, 3s);
+  auto conn = co_await tcp::connect_to(endpoint, 3s); // it would throw an exception if timeout
   // ... do sth with conn
 }
 
