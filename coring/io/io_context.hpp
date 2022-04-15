@@ -870,7 +870,8 @@ class io_context : public coring::detail::io_uring_context {
   /// Immediate issue a one-way-task to run the awaitable.
   /// Make sure you are in the current thread (or, inside of a coroutine running on the io_context).
   /// check io_context::spawn(...).
-  void execute(my_task_t &&awaitable) {
+  template <typename AWAITABLE>
+  void execute(AWAITABLE &&awaitable) {
     // now it was call inside of the wait_for_completion,
     // so it would be submitted soon (at next round of run)
     my_scope_.spawn(std::move(awaitable));

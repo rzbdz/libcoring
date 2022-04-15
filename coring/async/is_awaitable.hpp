@@ -33,6 +33,9 @@ struct is_awaitable<T, std::void_t<decltype(coring::detail::get_awaiter(std::dec
 
 template <typename T>
 constexpr bool is_awaitable_v = is_awaitable<T>::value;
+
+template <typename T>
+concept Awaitable = is_awaitable_v<T>;
 }  // namespace coring
 
 #endif
