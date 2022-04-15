@@ -46,6 +46,18 @@ class async_scope {
     }(this, std::forward<AWAITABLE>(awaitable));
   }
 
+  // I add this method to make it support `fire and forget but then look back` semantic
+  // FYI: https://togithub.com/lewissbaker/cppcoro/issues/145.
+  template <typename AWAITABLE, typename Functor>
+  void spawn(AWAITABLE &&awaitable, Functor &&f) {
+    [](async_scope *scope, std::decay_t<AWAITABLE> awaitable, std::decay_t<Functor> f) -> oneway_task {
+      scope->on_work_started();
+      auto decrementOnCompletion = on_scope_exit([scope] { scope->on_work_finished(); });
+      auto res = co_await std::move(awaitable);
+      f(res);
+    }(this, std::forward<AWAITABLE>(awaitable), std::forward<Functor>(f));
+  }
+
   [[nodiscard]] auto join() noexcept {
     class awaiter {
       async_scope *m_scope;
