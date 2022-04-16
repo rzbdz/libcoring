@@ -23,7 +23,7 @@ class socket : public file_descriptor {
   net::endpoint peer_endpoint();
 
   detail::io_awaitable read_some(char *dst, size_t nbytes) {
-    return coro::get_io_context_ref().recv(fd_, (void *)dst, (unsigned)nbytes, 0);
+    return coro::get_io_context().recv(fd_, (void *)dst, (unsigned)nbytes, 0);
   }
 
   bool is_self_connect();

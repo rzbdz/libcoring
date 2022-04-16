@@ -2,7 +2,6 @@
 #ifndef CORING_ACCEPTOR_HPP
 #define CORING_ACCEPTOR_HPP
 #include <stop_token>
-#include <iostream>
 #include <unistd.h>
 #include "endpoint.hpp"
 #include "socket.hpp"

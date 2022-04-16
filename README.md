@@ -72,6 +72,45 @@ void run() {
 }
 ```
 
+#### Cancellation
+
+I like this, it fulfills a real asynchronous programing style.
+
+Cancellation with `io_uring` is indeed tricky, and I do have concerns on the performance (both memory usage and extra
+runtime overhead).
+
+Anyway, the first usable cancellation is supported now, more tests would be done and more functionalities would support
+cancellation soon.
+
+What's noteworthy is that the cancellation is working with `async_task` while those use `task`(lazy) as coroutine would
+not support cancellation. I think this distinguishes the `fire-but-pickup-later` semantic and `await/async` semantic
+using lazy `task`.
+
+A demo would be like this (another style of `connect_to with` timeout):
+
+```cpp
+task<> connect(io_context *ioc) {
+  using namespace std::chrono_literals;
+  try {
+    io_cancel_source src;
+    auto ep = net::endpoint::from_resolve("www.google.com", 80);
+    // non-blocking, fire-and-forget, async_task
+    auto promise = tcp::connect_to(ep, src.get_token()); 
+    // I can just do many other things here, say do some O(n^2) computing...
+    // ......
+    // use this for simplicity, user space timer is low cost-effective here...
+    co_await ioc->timeout(3s);
+    if (!promise.is_ready()) {
+      auto res = co_await src.cancel_and_wait_for_result(*ioc);
+      // res is 0 if successfully cancelled
+    }
+    [[maybe_unused]] auto c = co_await promise; 
+    // here may throw if cancelled, I didn't decide if we should count ECLEAN as an exception 
+  }
+  catch_it;
+}
+```
+
 more documents would be provided soon after the first usable version is merged into master branch.
 
 #### Setup the environment:

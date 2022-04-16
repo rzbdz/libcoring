@@ -34,7 +34,7 @@ class socket_writer_base {
   /// \param
   /// \return
   [[nodiscard]] task<int> write_to_file() {
-    auto &ctx = coro::get_io_context_ref();
+    auto &ctx = coro::get_io_context();
     // use send instead of read benefits from internal poll/epoll mechanism (maybe)
     auto n = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
     handle_write_error(n);
@@ -46,7 +46,7 @@ class socket_writer_base {
   /// \return
   [[nodiscard]] task<size_t> write_all_to_file() {
     size_t n = upper_layer_.readable();
-    auto &ctx = coro::get_io_context_ref();
+    auto &ctx = coro::get_io_context();
     while (n != 0) {
       // LOG_TRACE("co await send");
       auto writed = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);

@@ -20,7 +20,7 @@ task<> short_read() {
     t.raw_buffer().push_back(sizeof(request_get));
     co_await t.write_all_to_file();
     // use raw interface to test short read (short count) problem
-    int ret = co_await coro::get_io_context_ref().read(con, buf, 56637, 0);
+    int ret = co_await coro::get_io_context().read(con, buf, 56637, 0);
     std::cout << "I have read: " << ret << " bytes" << buf << std::endl;
     co_await con.shutdown();
     co_await con.close();
@@ -28,7 +28,7 @@ task<> short_read() {
     std::cout << "inside short read: " << e.what() << std::endl;
   }
   std::cout << "shit end" << std::endl;
-  coro::get_io_context_ref().stop();
+  coro::get_io_context().stop();
 }
 
 int main() {

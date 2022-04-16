@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
     using namespace std::chrono_literals;
     co_await timeout(std::chrono::seconds(s_time));
     spt->request_stop();
-    coro::get_io_context_ref().stop();
+    coro::get_io_context().stop();
   }(&src, s_time));
   // This would bring async punts too, at about 1000+ iou-wrk thread.
   ctx[0]->schedule(acceptor(src.get_token(), act));

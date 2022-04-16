@@ -19,3 +19,6 @@ target_link_libraries(short_read_problem uring logging coring_net)
 # simple usage/demo/tests
 add_executable(connect_with_timeout connect_with_timeout.cpp)
 target_link_libraries(connect_with_timeout uring coring_net)
+# simple usage/demo/tests
+add_executable(use_cancel_token use_cancel_token.cpp)
+target_link_libraries(use_cancel_token uring coring_net)

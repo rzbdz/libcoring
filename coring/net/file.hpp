@@ -81,7 +81,7 @@ class file_base : public file_descriptor {
   task<> fill_statx(uint mask = STATX_BASIC_STATS) {
     static_assert(std::is_same_v<StatusType, full_status>);
     status_.init();
-    auto ret = co_await coro::get_io_context_ref().statx(fd_, "\0", AT_EMPTY_PATH, mask, status_.view());
+    auto ret = co_await coro::get_io_context().statx(fd_, "\0", AT_EMPTY_PATH, mask, status_.view());
     if (ret < 0) {
       throw std::system_error(std::error_code{-ret, std::system_category()});
     }
@@ -103,7 +103,7 @@ namespace file {
 /// \return
 template <class FileStorageType = file_t>
 task<FileStorageType> openat(const char *path, int flags, mode_t mode, int dirfd = AT_FDCWD) {
-  auto ffd = co_await coro::get_io_context_ref().openat(dirfd, path, flags, mode);
+  auto ffd = co_await coro::get_io_context().openat(dirfd, path, flags, mode);
   if (ffd < 0) {
     throw std::system_error(std::error_code{-ffd, std::system_category()});
   }

@@ -48,7 +48,7 @@ void socket::setsockopt(int level, int optname, const void *optval, socklen_t op
   }
 }
 
-detail::io_awaitable socket::shutdown(int how) { return coro::get_io_context_ref().shutdown(fd_, how); }
+detail::io_awaitable socket::shutdown(int how) { return coro::get_io_context().shutdown(fd_, how); }
 
 void socket::set_tcp_no_delay(bool on) {
   int optval = on ? 1 : 0;

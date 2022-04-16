@@ -9,7 +9,7 @@ namespace coring {
 /// \param expiration I think you can use chrono_literals like 1us.
 /// \return Please just co_await it.
 template <typename Duration>
-detail::timeout_awaitable timeout(Duration expiration, io_context &ctx = coro::get_io_context_ref()) {
+detail::timeout_awaitable timeout(Duration expiration, io_context &ctx = coro::get_io_context()) {
   //  LOG_DEBUG_RAW("coawait timeout, duration(us): %ld",
   //                std::chrono::duration_cast<std::chrono::microseconds>(expiration).count());
   return {std::chrono::duration_cast<std::chrono::microseconds>(expiration), ctx};
@@ -24,7 +24,7 @@ detail::timeout_awaitable timeout(Duration expiration, io_context &ctx = coro::g
 template <typename TimePoint>
 detail::timeout_awaitable until(TimePoint p) {
   throw std::runtime_error("NOT SUPPORTED YET, reported by coring::until task");
-  return {p, coro::get_io_context_ref()};
+  return {p, coro::get_io_context()};
 }
 }  // namespace coring
 #endif  // CORING_TIMEOUT_HPP

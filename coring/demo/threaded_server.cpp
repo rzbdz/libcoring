@@ -55,7 +55,7 @@ task<> acceptor(std::stop_token tk, tcp::acceptor &act) {
 }
 task<> exit_after(long s_time) {
   co_await timeout(std::chrono::seconds(s_time));
-  coro::get_io_context_ref().stop();
+  coro::get_io_context().stop();
 }
 void setup_acceptor(io_context **ctx, tcp::acceptor &act, std::stop_token tk, long s_time) {
   for (int i = 0; i < 2; i++) {

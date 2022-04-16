@@ -216,7 +216,7 @@ TEST(Timeout, recursiveTimers) {
 }
 task<> sleep_for_accurate(std::chrono::microseconds t) {
   auto stamp_before = std::chrono::duration_cast<microseconds>(system_clock::now().time_since_epoch());
-  co_await coro::get_io_context_ref().timeout(t);
+  co_await coro::get_io_context().timeout(t);
   auto stamp_after = std::chrono::duration_cast<microseconds>(system_clock::now().time_since_epoch());
   auto pass = (stamp_after - stamp_before).count();
   auto ti = t.count();

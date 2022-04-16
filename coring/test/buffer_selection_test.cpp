@@ -39,7 +39,7 @@ struct MockService {
     task<std::pair<int, int>> read_buffer_select(int fd, __u16 gname, int n);
   };
   static fake_context impl_;
-  static fake_context &get_io_context_ref() { return impl_; }
+  static fake_context &get_io_context() { return impl_; }
 };
 
 MockService::fake_context MockService::impl_{};

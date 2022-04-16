@@ -1,7 +1,6 @@
 /// TODO: A bad abstraction, remove it later
 #ifndef CORING_TCP_CONNECTION_HPP
 #define CORING_TCP_CONNECTION_HPP
-
 #include "socket.hpp"
 #include "coring/utils/time_utils.hpp"
 namespace coring::detail {
@@ -13,7 +12,7 @@ struct _tcp_connection_helper {
   static inline void handle_connect_error(int ret_code) {
     if (ret_code == 0) return;
     if (ret_code == ECANCELED) {
-      throw std::runtime_error("try connect to peer timeout, canceled");
+      throw std::runtime_error("connect canceled");
     }
     throw std::system_error(std::error_code{ret_code, std::system_category()});
   }
@@ -31,7 +30,7 @@ struct _tcp_connection_helper {
     // Is it work?
     ::close(tempfd_to_close);
     if (ret_code == ECANCELED) {
-      throw std::runtime_error("try connect to peer timeout, canceled");
+      throw std::runtime_error("connect canceled");
     }
     throw std::system_error(std::error_code{ret_code, std::system_category()});
   }
@@ -116,7 +115,16 @@ typedef connection_base<socket_endpoints> socket_connection;
 template <typename CONN_TYPE = connection>
 task<CONN_TYPE> connect_to(const net::endpoint &peer) {
   int fd = tcp::new_socket_safe();
-  int ret = co_await coro::get_io_context_ref().connect(fd, peer.as_sockaddr(), net::endpoint::len);
+  // std::cout << "go co_await connect" << std::endl;
+  int ret = co_await coro::get_io_context().connect(fd, peer.as_sockaddr(), net::endpoint::len, 0);
+  detail::_tcp_connection_helper::handle_connect_error(-ret, fd);
+  co_return CONN_TYPE(fd);
+}
+
+template <typename CONN_TYPE = connection>
+async_task<CONN_TYPE> connect_to(const net::endpoint &peer, io_cancel_token token) {
+  int fd = tcp::new_socket_safe();
+  int ret = co_await coro::get_io_context().connect(fd, peer.as_sockaddr(), net::endpoint::len, 0, token);
   detail::_tcp_connection_helper::handle_connect_error(-ret, fd);
   co_return CONN_TYPE(fd);
 }
@@ -138,9 +146,9 @@ template <typename CONN_TYPE = connection, typename Duration>
 requires(!std::is_same_v<std::remove_cvref<Duration>, net::endpoint>) task<CONN_TYPE> connect_to(
     const net::endpoint &peer, Duration &&dur) {
   int fd = tcp::new_socket_safe();
-  auto connd_awaitable = coro::get_io_context_ref().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
+  auto connd_awaitable = coro::get_io_context().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
   auto k = make_timespec(std::forward<Duration>(dur));
-  coro::get_io_context_ref().link_timeout(&k);
+  coro::get_io_context().link_timeout(&k);
   int ret = co_await connd_awaitable;
   detail::_tcp_connection_helper::handle_connect_error(-ret, fd);
   co_return CONN_TYPE{fd};
@@ -163,9 +171,9 @@ template <typename CONN_TYPE = connection, typename Duration>
 task<CONN_TYPE> connect_to(const net::endpoint &local, const net::endpoint &peer, Duration &&dur) {
   int fd = tcp::new_socket_safe();
   safe_bind_socket(fd, local.as_sockaddr());
-  auto connd_awaitable = coro::get_io_context_ref().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
+  auto connd_awaitable = coro::get_io_context().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
   auto k = make_timespec(std::forward<Duration>(dur));
-  coro::get_io_context_ref().link_timeout(&k);
+  coro::get_io_context().link_timeout(&k);
   int ret = co_await connd_awaitable;
   detail::_tcp_connection_helper::handle_connect_error(-ret, fd);
   co_return CONN_TYPE{fd, local, peer};
@@ -185,9 +193,9 @@ task<CONN_TYPE> connect_to(const net::endpoint &local, const net::endpoint &peer
 /// \return
 template <typename CONN_TYPE = connection, typename Duration>
 task<CONN_TYPE> connect_to(int fd, const net::endpoint &peer, Duration &&dur) {
-  auto connd_awaitable = coro::get_io_context_ref().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
+  auto connd_awaitable = coro::get_io_context().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
   auto k = make_timespec(std::forward<Duration>(dur));
-  coro::get_io_context_ref().link_timeout(&k);
+  coro::get_io_context().link_timeout(&k);
   int ret = co_await connd_awaitable;
   detail::_tcp_connection_helper::handle_connect_error(-ret);
   co_return CONN_TYPE{fd};

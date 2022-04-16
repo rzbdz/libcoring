@@ -87,7 +87,7 @@ class selected_buffer_resource : noncopyable {
     /// You may want to have a look on: P1662 Adding async RAII support to coroutines, FYI:
     /// @see https://github.com/cplusplus/papers/issues?q=RAII
     if (val != nullptr) {
-      [[maybe_unused]] auto ret = ContextService::get_io_context_ref().provide_buffers(
+      [[maybe_unused]] auto ret = ContextService::get_io_context().provide_buffers(
           const_cast<char *>(val->data()), static_cast<int>(val->size()), 1, val->group_id_, val->buf_id_);
       val->clear();
     }
@@ -123,13 +123,13 @@ class buffer_pool_base {
 
   void return_back(selected_buffer &val) {
     val.clear();
-    [[maybe_unused]] auto ret = ContextService::get_io_context_ref().provide_buffers(
+    [[maybe_unused]] auto ret = ContextService::get_io_context().provide_buffers(
         const_cast<char *>(val.data()), static_cast<int>(val.size()), 1, val.group_id_, val.buf_id_);
   }
 
   task<int> returned_back(selected_buffer &val) {
     val.clear();
-    co_return co_await ContextService::get_io_context_ref().provide_buffers(
+    co_return co_await ContextService::get_io_context().provide_buffers(
         const_cast<char *>(val.data()), static_cast<int>(val.size()), 1, val.group_id_, val.buf_id_);
   }
 
@@ -150,7 +150,7 @@ class buffer_pool_base {
   //    }
   //  }
   task<> provide_group_contiguous(char *base, __u16 nbytes_per_block, int how_many_blocks, id_t g_name) {
-    auto ret = co_await ContextService::get_io_context_ref().provide_buffers(base, nbytes_per_block, how_many_blocks,
+    auto ret = co_await ContextService::get_io_context().provide_buffers(base, nbytes_per_block, how_many_blocks,
                                                                              g_name, 0);
     if (ret < 0) {
       throw std::system_error(std::error_code{-ret, std::system_category()});
@@ -185,7 +185,7 @@ class buffer_pool_base {
   task<selected_buffer &> try_read_block(int fd, id_t g_name, int nbytes) {
     auto it = find_group(g_name);
     // LOG_TRACE("co await read buffer_select");
-    auto ret = co_await ContextService::get_io_context_ref().read_buffer_select(fd, g_name, nbytes);
+    auto ret = co_await ContextService::get_io_context().read_buffer_select(fd, g_name, nbytes);
     auto res = ret.first, flag = ret.second;
     if (res <= 0) {
       throw std::system_error(std::error_code{-res, std::system_category()});
@@ -202,7 +202,7 @@ class buffer_pool_base {
   task<selected_buffer &> try_read_block(int fd, id_t g_name) {
     auto it = find_group(g_name);
     int nbytes = it->second.nbytes_per_block;
-    auto ret = co_await ContextService::get_io_context_ref().read_buffer_select(fd, g_name, nbytes);
+    auto ret = co_await ContextService::get_io_context().read_buffer_select(fd, g_name, nbytes);
     auto res = ret.first, flag = ret.second;
     if (res <= 0) {
       throw std::system_error(std::error_code{-ret, std::system_category()});
