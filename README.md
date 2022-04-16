@@ -144,6 +144,9 @@ task<> do_something(io_context *ioc, cancellation_token token) {
       [[maybe_unused]] auto c1 = co_await promise1;
       [[maybe_unused]] auto c2 = co_await promise2; 
       [[maybe_unused]] auto c3 = co_await promise3; // here may throw if cancelled
+      cleanning_up(); // if we use buffers for async operation, 
+                      // we might want to release those buffers and regain the memories.
+      co_return;
     }
     //.... more code here
     auto conn1 = co_await promise1;
@@ -156,7 +159,7 @@ task<> do_something(io_context *ioc, cancellation_token token) {
   catch_it;
 }
 task<>at_some_time_cancel_it(cancellation_source* src){
-  auto res = co_await do_many_things();
+  auto res = co_await do_many_things(); // it could be a timeout or something
   if(res){
     co_await src.request_cancel();
   }
