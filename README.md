@@ -152,9 +152,9 @@ task<> do_something(io_context *ioc, cancellation_token token) {
     auto conn1 = co_await promise1;
     auto conn2 = co_await promise2; 
     auto conn3 = co_await promise3;
-    socket_writer(conn1, array.to_buffer(), src1); // now the source could be reuse
-    socket_writer(conn1, array.to_buffer(), src1); // async_task, fire and forget
-    socket_writer(conn1, array.to_buffer(), src1);
+    socket_writer(conn1, result_container.to_buffer(), src1); // now the source could be reuse
+    socket_writer(conn1, result_container.to_buffer(), src1); // async_task, fire and forget
+    socket_writer(conn1, result_container.to_buffer(), src1);
   }
   catch_it;
 }
