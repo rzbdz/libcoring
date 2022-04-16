@@ -127,10 +127,10 @@ task<> do_something(io_context *ioc, cancellation_token token) {
   try {
     io_cancel_source src1, src2, src3; // current implementation limit one source per async io operation
     auto [endpoint1, endpoint2, endpoint3] = resolve_server_endpoints_frome_somewhere();
-    auto promise1 = tcp::connect_to(endpoint1, src1.get_token());
+    auto promise1 = tcp::connect_to(endpoint1, src1.get_token()); // async_task, fire and forget, but do start !
     auto promise2 = tcp::connect_to(endpoint2, src2.get_token());
     auto promise3 = tcp::connect_to(endpoint3, src3.get_token());
-    // we then generate some request data before we connected to the host
+    // we then generate some request data before (or interleave, we don't know) we connected to the host
     auto array = get_from_somewhere();
     auto result_container = get_from_somewhere2();
     for(auto i : array) for(auto j : i){
