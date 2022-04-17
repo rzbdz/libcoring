@@ -3,7 +3,7 @@
 libcoring is a C++ network library in Proactor pattern (@see: POSA2), and it is based on the new io_uring syscall of
 linux and coroutine in C++ 20. It's under development now, the progress could be viewed in Github project page. For an
 overview of development document or to know how libcoring is arranged, please refer to [design document](docs/design.md)
-file.
+file. Other documents would be provided in the [docs](docs) folder shipped with latest commits.
 
 ---
 
@@ -74,17 +74,18 @@ void run() {
 
 #### Cancellation
 
-I like this, it fulfills a real asynchronous programing style.
+What described in this section is only available in branch `cancellation` since it involves a lot of changes on the
+structures and design, check [here](https://github.com/rzbdz/libcoring/tree/cancellation), once it's stable, it would be
+merged.
 
-Cancellation with `io_uring` is indeed tricky, and I do have concerns on the performance (both memory usage and extra
-runtime overhead).
+Cancellation with c++ coroutine and `io_uring` is difficult to implement, and there are concerns on the performance (
+both memory usage and extra runtime overhead).
 
-Anyway, the first usable cancellation is supported now, more tests would be done and more functionalities would support
-cancellation soon.
+Anyway, the first usable cancellation is supported (limited) now, more tests would be done and more functionalities
+would support cancellation soon.
 
-What's noteworthy is that the cancellation is working with `async_task` while those use `task`(lazy) as coroutine would
-not support cancellation. I think this distinguishes the `fire-but-pickup-later` semantic and `await/async` semantic
-using lazy `task`.
+The cancellation is working with `async_task`. Using lazy `task` as coroutine would not benefit from it. This
+distinguishes the `fire-but-pickup-later` semantic and `await/async` semantic.
 
 A demo would be like this (another style of `connect_to with` timeout):
 
@@ -110,6 +111,9 @@ task<> connect(io_context *ioc) {
   catch_it;
 }
 ```
+
+Current implementation doesn't support multiple io operation (in `async_task` way) sharing a same `io_cancel_source`, it
+should be fixed.
 
 more documents would be provided soon after the first usable version is merged into master branch.
 
