@@ -3,9 +3,7 @@
 #include <chrono>
 #include <gtest/gtest.h>
 #include <iostream>
-//
-// Created by A1134 on 2022/4/7.
-//
+
 class CORING_TEST_CLASS {
  public:
   static constexpr int scale = 65536;

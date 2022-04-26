@@ -37,8 +37,15 @@ struct full_status {
   [[nodiscard]] struct ::statx *view() { return statx_buf_; }
 
   full_status(const full_status &src) {
-    statx_buf_ = new struct statx;
-    *statx_buf_ = *(src.statx_buf_);
+    if (src.statx_buf_ != nullptr) {
+      statx_buf_ = new struct statx;
+      *statx_buf_ = *(src.statx_buf_);
+    }
+  }
+  /// we have to do this so as to support tast return
+  full_status(full_status &&src) noexcept {
+    statx_buf_ = src.statx_buf_;
+    src.statx_buf_ = nullptr;
   }
   full_status() = default;
   ~full_status() {
@@ -54,9 +61,9 @@ typedef file_base<full_status> detailed_file_t;
 template <typename StatusType>
 class file_base : public file_descriptor {
  public:
-  file_base(int ffd) : file_descriptor{ffd} {}
+  explicit file_base(int ffd) : file_descriptor{ffd} {}
   file_base(const file_base &rhs) : file_descriptor{rhs.fd_}, status_{rhs.status_} {}
-  file_base(file_base &&rhs) : file_descriptor{rhs.fd_}, status_{std::move(rhs.status_)} {}
+  file_base(file_base &&rhs) noexcept : file_descriptor{rhs.fd_}, status_{std::move(rhs.status_)} {}
 
   /// Fill the statx lazily...
   /// @see: statx(2)
@@ -87,6 +94,11 @@ class file_base : public file_descriptor {
     }
   }
 
+  auto status_view() {
+    static_assert(std::is_same_v<StatusType, full_status>);
+    return status_.view();
+  }
+
  private:
   StatusType status_;
 };
@@ -101,13 +113,15 @@ namespace file {
 /// \param mode  The mode argument specifies the file mode bits be applied when a new file is created.
 ///              e.g. S_IRWXU = 00700, user read write execute, S_IWGRP group write
 /// \return
-template <class FileStorageType = file_t>
-task<FileStorageType> openat(const char *path, int flags, mode_t mode, int dirfd = AT_FDCWD) {
+template <class FileStorageType = file_t, bool UseExecption = false>
+task<FileStorageType> openat(const char *path, int flags, mode_t mode = 0, int dirfd = AT_FDCWD) {
   auto ffd = co_await coro::get_io_context_ref().openat(dirfd, path, flags, mode);
-  if (ffd < 0) {
-    throw std::system_error(std::error_code{-ffd, std::system_category()});
+  if constexpr (UseExecption) {
+    if (ffd < 0) {
+      throw std::system_error(std::error_code{-ffd, std::system_category()});
+    }
   }
-  co_return FileStorageType{ffd};
+  co_return std::move(FileStorageType{ffd});
 }
 }  // namespace file
 }  // namespace coring

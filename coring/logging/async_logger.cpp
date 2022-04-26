@@ -103,6 +103,29 @@ void async_logger::logging_loop() {
   output_file_.force_flush();
 }
 
+void async_logger::run() {
+  if (__glibc_unlikely(thread_.joinable())) {
+    stop();
+  }
+  thread_ = std::jthread{[this] { logging_loop(); }};
+  // make sure it 's running then return to caller
+  count_down_latch_.wait();
+}
+void async_logger::block_sigint_then_run() {
+  if (__glibc_unlikely(thread_.joinable())) {
+    stop();
+  }
+  thread_ = std::jthread{[this] {
+    sigset_t s;
+    ::sigemptyset(&s);
+    ::sigaddset(&s, SIGINT);
+    ::pthread_sigmask(SIG_BLOCK, &s, nullptr);
+    logging_loop();
+  }};
+  // make sure it 's running then return to caller
+  count_down_latch_.wait();
+}
+
 void async_logger::stop() {
   stop_source_.request_stop();
   {

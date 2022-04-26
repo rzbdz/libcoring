@@ -45,7 +45,7 @@ struct EchoServer {
   task<> echo_loop(tcp::connection conn) {
     try {
       while (true) {
-        auto &read_buffer = co_await pool.try_read_block(conn, GID, MAX_MESSAGE_LEN);
+        auto &read_buffer = co_await pool.try_read_block(conn, GID);
         LOG_INFO("read,bid: {} sz: {}", read_buffer.buffer_id(), read_buffer.readable());
         selected_buffer_resource on_scope_exit{read_buffer};
         auto writer = socket_writer(conn, read_buffer);
@@ -92,8 +92,11 @@ int main(int argc, char *argv[]) {
   EchoServer server{port};
   if (logger_on) {
     async_logger logger{"echo_server"};
-    set_log_level(INFO);  // no logging output by default
+    logger.start();
+    set_log_level(TRACE);  // no logging output by default
+    server.run();
+  } else {
+    server.run();
   }
-  server.run();
   return 0;
 }

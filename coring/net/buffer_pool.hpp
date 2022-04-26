@@ -182,30 +182,14 @@ class buffer_pool_base {
   /// \param g_name
   /// \param nbytes
   /// \return
-  task<selected_buffer &> try_read_block(int fd, id_t g_name, int nbytes) {
+  task<selected_buffer &> try_read_block(int fd, id_t g_name, off_t offset = 0) {
     auto it = find_group(g_name);
+    int nbytes = it->second.nbytes_per_block;
     // LOG_TRACE("co await read buffer_select");
-    auto ret = co_await ContextService::get_io_context_ref().read_buffer_select(fd, g_name, nbytes);
+    auto ret = co_await ContextService::get_io_context_ref().read_buffer_select(fd, g_name, nbytes, offset);
     auto res = ret.first, flag = ret.second;
     if (res <= 0) {
       throw std::system_error(std::error_code{-res, std::system_category()});
-    }
-    auto &g = it->second;
-    g.blocks[flag].push_back(res);
-    co_return g.blocks[flag];
-  }
-  /// RAII
-  /// \param fd
-  /// \param g_name
-  /// \param nbytes
-  /// \return
-  task<selected_buffer &> try_read_block(int fd, id_t g_name) {
-    auto it = find_group(g_name);
-    int nbytes = it->second.nbytes_per_block;
-    auto ret = co_await ContextService::get_io_context_ref().read_buffer_select(fd, g_name, nbytes);
-    auto res = ret.first, flag = ret.second;
-    if (res <= 0) {
-      throw std::system_error(std::error_code{-ret, std::system_category()});
     }
     auto &g = it->second;
     g.blocks[flag].push_back(res);

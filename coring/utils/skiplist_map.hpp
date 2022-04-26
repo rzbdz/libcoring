@@ -279,6 +279,9 @@ class skiplist_map {
   }
   size_t size() const { return length_; }
   void add(std::pair<KeyType, ValueType> &&data) {
+    // FIXME: We may want to leave the locking stuff to map user
+    // if we only use this in single context a.k.a. single thread,
+    // we don't want to use lock at all.
     std::lock_guard lk(mutex_);
     ++length_;
     // 1,2,3,4,5,5,7
@@ -324,7 +327,7 @@ class skiplist_map {
     if (!prevs[0]->level_next_[0] || prevs[0]->level_next_[0]->data_.first != key) return false;
     _skiplist_node *del = prevs[0]->level_next_[0];
     // from prev->cur->next to prev->next
-    for (int i = 0; i < del->level_next_.size(); i++) {
+    for (size_t i = 0; i < del->level_next_.size(); i++) {
       // TODO: Is there a way to know how many level the node to be deleted have?
       // if (prevs[i]->level_next_[i] == del)
       prevs[i]->level_next_[i] = del->level_next_[i];

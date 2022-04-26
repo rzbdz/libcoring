@@ -36,7 +36,7 @@ struct MockService {
     int cursor = 3;
     bool NOBUF = false;
     bool go(int first);
-    task<std::pair<int, int>> read_buffer_select(int fd, __u16 gname, int n);
+    task<std::pair<int, int>> read_buffer_select(int fd, __u16 gname, int n, int off);
   };
   static fake_context impl_;
   static fake_context &get_io_context_ref() { return impl_; }
@@ -80,7 +80,7 @@ async_task<int> MockService::fake_context::provide_buffers(char *b, int n, int m
   print_all();
   co_return 100;
 }
-task<std::pair<int, int>> MockService::fake_context::read_buffer_select(int fd, __u16 gname, int n) {
+task<std::pair<int, int>> MockService::fake_context::read_buffer_select(int fd, __u16 gname, int n, int off) {
   auto tmp = cursor;
   while (go(tmp))
     if (NOBUF) co_return std::make_pair(-ENOBUFS, 0);
@@ -99,7 +99,7 @@ async_task<> SimpleProvideOneGroup(buffer_pool_base<MockService> &pool) {
   int many = 0xA;
   co_await pool.provide_group_contiguous(ptr, len, many, "AC");
   {
-    auto buffer_view = selected_buffer_resource<MockService>{co_await pool.try_read_block(0, "AC", 20)};
+    auto buffer_view = selected_buffer_resource<MockService>{co_await pool.try_read_block(0, "AC")};
     auto &buffer = buffer_view.get();
     LDR("%ld", buffer.size());
     // only expect can be used...
@@ -107,14 +107,14 @@ async_task<> SimpleProvideOneGroup(buffer_pool_base<MockService> &pool) {
   }
   for (auto i = 0; i < many; i++) {
     try {
-      [[maybe_unused]] auto &bf = co_await pool.try_read_block(0, "AC", 20);
+      [[maybe_unused]] auto &bf = co_await pool.try_read_block(0, "AC");
     } catch (std::system_error &e) {
       LDR("%s", e.what());
       EXPECT_EQ("Should not run out for a resource managed", "thrown");
     }
   }
   try {
-    [[maybe_unused]] auto &bf = co_await pool.try_read_block(0, "AC", 20);
+    [[maybe_unused]] auto &bf = co_await pool.try_read_block(0, "AC");
   } catch (std::system_error &e) {
     LDR("%s", e.what());
     EXPECT_EQ("Should run-out", "Should run-out");

@@ -1,25 +1,23 @@
 ### What 's this:
 
 libcoring is a C++ network library in Proactor pattern (@see: POSA2), and it is based on the new io_uring syscall of
-linux and coroutine in C++ 20. It's under development now, the progress could be viewed in Github project page. For an
-overview of development document or to know how libcoring is arranged, please refer to [design document](docs/design.md)
-file.
+linux and coroutine in C++ 20. It's under development now, the progress could be viewed in Github project page.
+
+There are some [documents](docs/) available:
+
+- For an overview of development document or to know how libcoring is arranged, please refer
+  to [design document](docs/design.md)
+  file.
+- To build and run this library with demos, check [getting start](docs/getting-start.md) file. Installation and library
+  import/link configuration isn't available yet for it's still developing.
 
 ---
 
-### Getting started:
+### Getting Start
 
-There are a few demos available inside the [coring/demo](https://github.com/rzbdz/libcoring/tree/dev/coring/demo)
-directory when the development is keep going , check them for basic usages of this \`library\`.
+Just take a look at the directory [demo](coring/demo/).
 
-#### echo server
-
-The \`hello world\` program of socket programing would be
-an [echo server](https://github.com/rzbdz/libcoring/blob/dev/coring/demo/echo_server.cpp). Though using io_uring with
-its features to get performance would involve a lot of works to read the manuals and discussions, an typically echo
-server in libcoring with the [automatic buffer selection](https://lwn.net/Articles/815491/) feature on would look like
-the codes below, the buffer family in libcoring do support reading or writing certain bytes from or to a socket with no
-needs to deal with short count problem, demos would be provided with next version:
+#### echo server:
 
 ```cpp
 // codes are trimmed, check the source `coring/demo/echo_server.cpp` for details
@@ -44,11 +42,7 @@ void run(){
 }
 ```
 
-#### timeout
-
-Another most used in socket programing would be timer, there are two types of timers in libcoring, one using
-the `hrtimer` in kernel provided by io_uring, the other is in the user space. To specific a timeout with an async
-operation, the codes would be like this, all async operations should support this:
+#### timeout:
 
 ```cpp
 // codes are trimmed, check the source `coring/demo/connect_with_timeout.cpp` for details
@@ -72,80 +66,56 @@ void run() {
 }
 ```
 
-#### Cancellation
-
-What described in this section is only available in branch `cancellation` since it involves a lot of changes on the
-structures and design, check [here](https://github.com/rzbdz/libcoring/tree/cancellation), once it's stable, it would be
-merged.
-
-Cancellation with c++ coroutine and `io_uring` is difficult to implement, and there are concerns on the performance (
-both memory usage and extra runtime overhead).
-
-Anyway, the first usable cancellation is supported (limited) now, more tests would be done and more functionalities
-would support cancellation soon.
-
-The cancellation is working with `async_task`. Using lazy `task` as coroutine would not benefit from it. This
-distinguishes the `fire-but-pickup-later` semantic and `await/async` semantic.
-
-A demo would be like this (another style of `connect_to with` timeout):
+#### cancellation:
 
 ```cpp
 task<> connect(io_context *ioc) {
   using namespace std::chrono_literals;
-  try {
-    io_cancel_source src;
-    auto ep = net::endpoint::from_resolve("www.google.com", 80);
-    // non-blocking, fire-and-forget, async_task
-    auto promise = tcp::connect_to(ep, src.get_token()); 
-    // I can just do many other things here, say do some O(n^2) computing...
-    // ......
-    // use this for simplicity, user space timer is low cost-effective here...
-    co_await ioc->timeout(3s);
-    if (!promise.is_ready()) {
-      auto res = co_await src.cancel_and_wait_for_result(*ioc);
-      // res is 0 if successfully cancelled
-    }
-    [[maybe_unused]] auto c = co_await promise; 
-    // here may throw if cancelled, I didn't decide if we should count ECLEAN as an exception 
+  io_cancel_source src;
+  auto ep = net::endpoint::from_resolve("www.google.com", 80);
+  // non-blocking, fire-and-forget, async_task
+  auto promise = tcp::connect_to(ep, src.get_token()); 
+  // I can just do many other things here, say do some O(n^2) computing...
+  // ......
+  // use this for simplicity, user space timer is low cost-effective here...
+  co_await ioc->timeout(3s);
+  if (!promise.is_ready()) {
+    auto res = co_await src.cancel_and_wait_for_result(*ioc);
+    // res is 0 if successfully cancelled
   }
-  catch_it;
+  [[maybe_unused]] auto c = co_await promise; 
+  // here may throw if cancelled, I didn't decide if we should count ECLEAN as an exception
 }
 ```
 
-Current implementation doesn't support multiple io operation (in `async_task` way) sharing a same `io_cancel_source`, it
-should be fixed.
-
-more documents would be provided soon after the first usable version is merged into master branch.
-
-#### Setup the environment:
-
-I should write some scripts for these procedures, now there is one available in `.github/workflows/all_compile.yml`
-.
-
-O/S requirements:
-
-- linux with kernel 5.6 or later (>=5.15 are suggested).
-- install [liburing](https://github.com/axboe/liburing) to the system.
-
-Checklist:
-
-- make sure g++-11 or compiler supports C++20 standard coroutine (no `std::experimental` needed) is installed.
-- make sure cmake, make, build-essential, google test is installed globally.
-
-Build and run the echo_server:
-
-```shell
-# root dir
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release 
-cd coring/demo # or just use --build 
-make echo_server
-./echo_server
-```
+For more details, check  [getting start](docs/getting-start.md) file.
 
 ---
 
-### Notes:
+### Performance
+
+Now the comparison is focus on the overhead of the utilities and coroutine abstraction in libcoring, when it comes to
+io_uring versus epoll/... is another topics. Currently, only httpd and echo-server is benched.
+Check [benchmark](docs/bench.md) page for details.
+
+Without SQPoll, compared to raw C liburing interface  (100%):
+
+| utility                      | QPS  | Throughput |
+|------------------------------|------|------------|
+| webbench        (120 bytes)  | 102% | 99%        |
+| apache bench    (120 bytes)  | 101% | 102%       |
+| rust-echo-bench (512 bytes)  | 96%  | N/A        |
+| rust-echo-bench (2018 bytes) | 102% | N/A        |
+
+---
+
+### Focusing on now
+
+- Cancellation for io_uring.
+
+---
+
+### Notices and Concerns:
 
 This project learn from following library or repositories:
 
@@ -170,20 +140,17 @@ try to find which is better design, maybe lazy task cooperate with executor woul
 - [my non-lazy task impl]( https://togithub.com/rzbdz/libcoring/commit/bd5ef1e5b2532a800673f9bc115aa131f7aec5c1)
 - [another C++2a coroutine library](https://togithub.com/Quuxplusone/coro)
 
+The cancellation for io_uring and combined with stackless coroutine would be a little difficult to image. There are
+mature solution in C# await and async facilities, but IOCP differs to io_uring on both cancellation and multithreading
+restrictions. Although a simple cancellation token could be used for coroutine, but the supports for io_uring would be
+another subject. Another things is that the cancellation part in io_uring is still keep going, recently the CANCEL_ANY
+is patched, cancellation is now supporting cancel more than one request a time (use a fd). But it requires a further
+upgrade of latest kernel, I would try once it's available.
+
+- [cppcoro::Cancellation](https://github.com/lewissbaker/cppcoro#Cancellation)
+- [Cancellation in C#](https://docs.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=net-6.0)
+- [Use Cancellation in C#](https://stackoverflow.com/questions/15067865/how-to-use-the-cancellationtoken-property)
+- [one io_uring patch](https://lore.kernel.org/all/20220418164402.75259-4-axboe@kernel.dk/)
+- [another io_uring patch](https://lore.kernel.org/all/20220418164402.75259-6-axboe@kernel.dk/)
+
 ---
-
-### Notice:
-
-There won't be any updating of docs/design.md file from its last update, but all information of the developing are
-available in the commit log, in detailed. If things change, this readme would be updated.
-
-The format of commit log is sustained:
-
-```
-type(scope): A BRIEF LINE \n
-\n
- - detailed explaination 1
- - detailed explaination 2
- - TODO (maybe)
- - what's next (maybe)
-```
