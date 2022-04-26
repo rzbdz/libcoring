@@ -1,0 +1,56 @@
+body {
+    margin: 50px 50px 50px 50px;
+}
+
+.margin-around {
+    flex-direction: row;
+    margin: 50px;
+}
+
+.card {
+    padding: 10px;
+    display: flex;
+    flex-direction: row;
+    background-color: ghostwhite;
+    border-color: #ffc90e;
+    border-style: solid;
+    border-radius: 5px;
+}
+
+.multi-line {
+    display: flex;
+    flex-direction: column;
+    margin-left: 20px;
+}
+
+#logo {
+    width: 10%;
+    height: 10%;
+    border-radius: 5px;
+}
+
+li {
+    flex: 1;
+}
+
+#go {
+    width: 50%;
+    height: 30%;
+}
+
+.github {
+    border-radius: 3px;
+    border-style: solid;
+    background-color: ghostwhite;
+    width: 20%;
+    height: 10%;
+    padding: 10px;
+    border-color: #ffc90e;
+}
+
+.github:hover {
+    border-color: #ff7f27;
+    background-color: #ff7f27;
+    color: white;
+    cursor: pointer;
+}
