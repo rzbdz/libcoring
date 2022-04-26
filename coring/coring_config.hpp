@@ -1,10 +1,7 @@
-//
-// Created by A1134 on 2022/4/7.
-//
 
 #ifndef CORING_CORING_CONFIG_HPP
 #define CORING_CORING_CONFIG_HPP
-//  #define CORING_ASYNC_LOGGER_STDOUT
+#define CORING_ASYNC_LOGGER_STDOUT
 class CORING_TEST_CLASS;
 namespace coring {
 constexpr int BUFFER_DEFAULT_SIZE = 128;

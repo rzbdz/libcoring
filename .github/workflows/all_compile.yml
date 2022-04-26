@@ -1,4 +1,4 @@
-name: Unit_Tests
+name: Compile All
 
 on:
   push:

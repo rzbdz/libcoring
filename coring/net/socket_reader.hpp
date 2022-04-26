@@ -10,6 +10,8 @@
 #include "coring/io/io_context.hpp"
 #include "socket.hpp"
 namespace coring {
+/// TODO: there are a lots of works to deal with timeout in this class
+/// but I may want to refactor it all.
 /// This class is a wrapper supporting io_context
 /// for char vector based buffer. (just like a decorator)
 /// are widely different.
@@ -51,19 +53,27 @@ class socket_reader_base {
   /// since you can always go and use the raw buffer methods like front()
   /// and readable() to read directly, the use case such as reading directly
   /// to structures are usable.
-  /// \param place the destination to place the data
+  /// \param dest the destination to place the data
   /// \param nbytes how many you want, it would block the coroutine
   ///        until get the amount data you want, only when an error
   ///        occurs will you get a false return value, which indicates that
   ///        the socket might be closed.
   /// \return
-  task<> read_certain(char *place, size_t nbytes) {
+  task<> read_certain(char *dest, size_t nbytes) {
     while (upper_layer_.readable() < nbytes) {
       co_await read_some();
     }
-    ::memcpy(place, upper_layer_.front(), nbytes);
+    ::memcpy(dest, upper_layer_.front(), nbytes);
     upper_layer_.pop_front(nbytes);
   }
+
+  task<std::string_view> read_till_certain(size_t nbytes) {
+    while (upper_layer_.readable() < nbytes) {
+      co_await read_some();
+    }
+    co_return std::string_view{upper_layer_.front(), nbytes};
+  }
+
   /// I don't know how to design the error handling
   /// when you need the return value used.
   /// I think I 'd better make all methods to
@@ -86,7 +96,7 @@ class socket_reader_base {
   /// If you want to do things directly on the buffer,
   /// just use the raw interfaces.
   /// \return
-  task<> read_line(char *place) {
+  task<> read_line(char *dest) {
     const char *end = nullptr;
     if (upper_layer_.readable() > 0) {
       end = upper_layer_.find_eol();
@@ -96,10 +106,23 @@ class socket_reader_base {
       end = upper_layer_.find_eol();
     }
     auto len = end - upper_layer_.front() + 1;
-    ::memcpy(place, upper_layer_.front(), len);
+    ::memcpy(dest, upper_layer_.front(), len);
     // TODO: I don't know if this is necessary.
     // place[len] = '\0';
     upper_layer_.pop_front(len);
+  }
+
+  task<std::string_view> read_till_line(char *dest) {
+    const char *end = nullptr;
+    if (upper_layer_.readable() > 0) {
+      end = upper_layer_.find_eol();
+    }
+    while (end == nullptr) {
+      co_await read_some();
+      end = upper_layer_.find_eol();
+    }
+    auto len = end - upper_layer_.front() + 1;
+    co_return std::string_view{upper_layer_.front(), len};
   }
 
   /// If you want to do things directly on the buffer,
@@ -120,7 +143,7 @@ class socket_reader_base {
   /// If you want to do things directly on the buffer,
   /// just use the raw interfaces.
   /// \return
-  task<> read_crlf_line(char *place) {
+  task<> read_crlf_line(char *dest) {
     const char *end = nullptr;
     if (upper_layer_.readable() >= 2) {
       end = upper_layer_.find_crlf();
@@ -130,16 +153,29 @@ class socket_reader_base {
       end = upper_layer_.find_crlf();
     }
     auto len = end - upper_layer_.front() + 2;
-    ::memcpy(place, upper_layer_.front(), len);
+    ::memcpy(dest, upper_layer_.front(), len);
     // TODO: I don't know if this is necessary.
     // place[len] = '\0';
     upper_layer_.pop_front(len);
   }
 
+  task<std::string_view> read_till_crlf() {
+    const char *end = nullptr;
+    if (upper_layer_.readable() >= 2) {
+      end = upper_layer_.find_crlf();
+    }
+    while (end == nullptr) {
+      co_await read_some();
+      end = upper_layer_.find_crlf();
+    }
+    auto len = end - upper_layer_.front() + 2;
+    co_return std::string_view{upper_layer_.front(), static_cast<std::string_view::size_type>(len)};
+  }
+
   /// If you want to do things directly on the buffer,
   /// just use the raw interfaces.
   /// \return
-  task<std::string> read_till_2crlf() {
+  task<std::string> read_2crlf_line() {
     const char *end = nullptr;
     if (upper_layer_.readable() >= 4) {
       end = upper_layer_.find_2crlf();
@@ -154,7 +190,7 @@ class socket_reader_base {
   /// If you want to do things directly on the buffer,
   /// just use the raw interfaces.
   /// \return
-  task<> read_till_2crlf(char *place) {
+  task<> read_2crlf_line(char *dest) {
     const char *end = nullptr;
     if (upper_layer_.readable() > 0) {
       end = upper_layer_.find_2crlf();
@@ -164,12 +200,27 @@ class socket_reader_base {
       end = upper_layer_.find_2crlf();
     }
     auto len = end - upper_layer_.front() + 4;
-    ::memcpy(place, upper_layer_.front(), len);
+    ::memcpy(dest, upper_layer_.front(), len);
     // TODO: I don't know if this is necessary.
     // place[len] = '\0';
     upper_layer_.pop_front(len);
   }
-  const buffer &as_buffer() { return upper_layer_; }
+
+  task<std::string_view> read_till_2crlf() {
+    const char *end = nullptr;
+    if (upper_layer_.readable() > 0) {
+      end = upper_layer_.find_2crlf();
+    }
+    while (end == nullptr) {
+      co_await read_some();
+      end = upper_layer_.find_2crlf();
+    }
+    auto len = end - upper_layer_.front() + 4;
+    co_return std::string_view{upper_layer_.front(), static_cast<std::string_view::size_type>(len)};
+  }
+
+  buffer &as_buffer() { return upper_layer_; }
+  const buffer &as_buffer() const { return upper_layer_; }
 
  private:
   // TODO: not work yet

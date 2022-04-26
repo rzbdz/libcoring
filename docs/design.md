@@ -2,6 +2,22 @@ libcoring is a C++ network library in Proactor pattern (@see: POSA2), and it is 
 linux and coroutine in C++ 20. It's under development now, the progress could be viewed in Github project page.
 ---
 
+### Notice:
+
+Many information of the developing are available in the commit log, in detailed. If things change, this readme would be
+updated.
+
+The format of commit log is sustained:
+
+```
+type(scope): A BRIEF LINE \n
+\n
+ - detailed explaination 1
+ - detailed explaination 2
+ - TODO (maybe)
+ - what's next (maybe)
+```
+
 ## Getting started
 
 ### Directories:

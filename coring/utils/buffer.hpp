@@ -111,6 +111,13 @@ class buffer_base : noncopyable {
 
   /// As named
   /// \return the place of first cr (\r)
+  [[nodiscard]] const char *find(char ch) const {
+    const char *crlf = memchr(front(), ch, readable());
+    return crlf == back() ? nullptr : crlf;
+  }
+
+  /// As named
+  /// \return the place of first cr (\r)
   [[nodiscard]] const char *find_crlf() const {
     const char *crlf = std::search(front(), back(), kCRLF, kCRLF + 2);
     return crlf == back() ? nullptr : crlf;
@@ -170,6 +177,7 @@ class fixed_buffer : public detail::buffer_base<detail::buffer_view> {
   explicit fixed_buffer(char (&s)[N]) : FatherType{{s, N - 1}} {
     // truncate the '\0' end flag.
   }
+
   void make_room(size_t want) {
     if (index_read_ > 0) {
       size_t now_have = readable();
@@ -183,7 +191,18 @@ class fixed_buffer : public detail::buffer_base<detail::buffer_view> {
       // container_.resize(index_write_ + want);
     }
   }
-  /// You should make room first.
+  /// it won't call make_room internal
+  void emplace_back(char ch) {
+    //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
+    // make_room(1);
+    char *dst = const_cast<char *>(back());
+    //    LDR("back: 0x%lx", (size_t)dst);
+    // ::memcpy(dst, src, len);
+    *dst = ch;
+    //    LDR("after copy, first byte in dst: %d", (int)(*dst));
+    push_back(1);
+  }
+  /// You don't need to make room.
   void emplace_back(const void *src, size_t len) {
     //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
     make_room(len);
@@ -230,7 +249,19 @@ class flex_buffer : public detail::buffer_base<std::vector<char>> {
   }
   virtual ~flex_buffer() override = default;
 
-  /// You should make room first.
+  /// it won't call make_room internal
+  void emplace_back(char ch) {
+    //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
+    // make_room(1);
+    char *dst = const_cast<char *>(back());
+    //    LDR("back: 0x%lx", (size_t)dst);
+    // ::memcpy(dst, src, len);
+    *dst = ch;
+    //    LDR("after copy, first byte in dst: %d", (int)(*dst));
+    push_back(1);
+  }
+
+  /// You don't need to make room.
   void emplace_back(const void *src, size_t len) {
     //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
     make_room(len);

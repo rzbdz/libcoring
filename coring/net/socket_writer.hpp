@@ -44,16 +44,18 @@ class socket_writer_base {
   /// write all to file, we must handle exception
   /// \param
   /// \return
-  [[nodiscard]] task<size_t> write_all_to_file() {
+  task<size_t> write_all_to_file() {
     size_t n = upper_layer_.readable();
     auto &ctx = coro::get_io_context_ref();
     while (n != 0) {
       // LOG_TRACE("co await send");
       auto writed = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
+      LOG_TRACE("co await send: {} bytes", writed);
       handle_write_error(writed);
       upper_layer_.pop_front(writed);
       n -= writed;
     }
+    // FIXME: useless return value...
     co_return n;
   }
 
@@ -85,6 +87,7 @@ class socket_writer_base {
   socket fd_;
   UpperType upper_layer_;
 };
+
 /// wrap a socket with a buffer...
 /// I don't know if there are other approach.
 /// \return a buffered io, recommended using auto
