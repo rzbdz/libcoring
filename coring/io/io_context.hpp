@@ -8,7 +8,7 @@
 #include <thread>
 #include <latch>
 #include <sys/poll.h>
-#include <sys/timerfd.h>
+#include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -38,6 +38,7 @@
 
 #include "io_awaitable.hpp"
 #include "timer.hpp"
+#include "signals.hpp"
 
 namespace coring {
 namespace detail {
@@ -724,14 +725,38 @@ class io_context : public coring::detail::io_uring_context {
   typedef io_context *executor_t;
 
  private:
-  typedef coring::task<> my_task_t;
+  typedef coring::task<> my_todo_t;
   static constexpr uint64_t EV_STOP_MSG = detail::EV_BIG_VALUE;
   static constexpr uint64_t EV_WAKEUP_MSG = detail::EV_SMALL_VALUE;
+
+  void create_eventfd() {
+    // NONBLOCK for direct write, no influence on io_uring_read
+    // internal_event_fd_ = ::eventfd(0, EFD_NONBLOCK);
+    internal_event_fd_ = ::eventfd(0, 0);
+    if (internal_event_fd_ == -1) {
+      // TODO: error handling
+      // it's another story.
+      // either use the exception or simply print some logs and abort.
+      // https://isocpp.org/wiki/faq/exceptions#ctors-can-throw
+      throw std::runtime_error("o/s fails to allocate more fd");
+    }
+  }
+
+  void create_signalfd(signal_set &s) {
+    internal_signal_fd_ = ::signalfd(-1, s.get_set(), 0);
+    if (internal_signal_fd_ == -1) {
+      // TODO: error handling
+      // it's another story.
+      // either use the exception or simply print some logs and abort.
+      // https://isocpp.org/wiki/faq/exceptions#ctors-can-throw
+      throw std::runtime_error("o/s fails to allocate more fd");
+    }
+  }
 
  public:
   io_context(int entries = 64, uint32_t flags = 0, uint32_t wq_fd = 0)
       : detail::io_uring_context{entries, flags, wq_fd} {
-    init();
+    create_eventfd();
   }
 
   /// stupid name, only for dev channel...
@@ -747,11 +772,28 @@ class io_context : public coring::detail::io_uring_context {
     }
   }
 
-  io_context(int entries, io_uring_params p) : detail::io_uring_context{entries, p} { init(); }
+  io_context(int entries, io_uring_params p) : detail::io_uring_context{entries, p} { create_eventfd(); }
 
-  io_context(int entries, io_uring_params *p) : detail::io_uring_context{entries, p} { init(); }
+  io_context(int entries, io_uring_params *p) : detail::io_uring_context{entries, p} { create_eventfd(); }
+
+  void register_signals(signal_set &s, __sighandler_t func = nullptr) {
+    create_signalfd(s);
+    signal_func_ = func;
+  }
 
  private:
+  coring::async_run init_signalfd(__sighandler_t func) {
+    struct signalfd_siginfo siginfo {};
+    do {
+      co_await read(internal_signal_fd_, &siginfo, sizeof(siginfo), 0, 0);
+      if (func != nullptr) {
+        func(siginfo.ssi_signo);
+      }
+      if (siginfo.ssi_signo == SIGINT) {
+        stopped_ = true;
+      }
+    } while (!stopped_);
+  }
   /// this coroutine should start (and be suspended) at io_context start
   coring::async_run init_eventfd() {
     uint64_t msg;
@@ -791,7 +833,7 @@ class io_context : public coring::detail::io_uring_context {
   }
 
   void notify(uint64_t msg) {
-    if (::write(internal_event_fd_, &msg, 8) == -1) {
+    if (::write(internal_event_fd_, &msg, sizeof(msg)) == -1) {
       // TODO: do something
       // it's ok since eventfd isn't been read.
       // when it's going to stop, it's fine
@@ -802,14 +844,8 @@ class io_context : public coring::detail::io_uring_context {
   }
 
   void do_todo_list() {
-    // since handle queue is just a bunch of function pointer in the end, we
-    // just use a local copy to avoid high contention.
-    // TODO: do we really need this? see if other thread would append to the list.
-    std::vector<my_task_t> local_copy{};
-    {
-      std::lock_guard lk(mutex_);
-      local_copy.swap(todo_list_);
-    }
+    std::vector<my_todo_t> local_copy{};
+    local_copy.swap(todo_list_);
     for (auto &t : local_copy) {
       // user should not pass any long running task in here.
       // that is to say, a task with co_await inside instead of
@@ -825,42 +861,7 @@ class io_context : public coring::detail::io_uring_context {
   // If need to close a socket/file, please make sure you use the IORING_OP_CLOSE with io_uring
   // for revoking all previous posts.
   // @see: https://patchwork.kernel.org/project/linux-fsdevel/patch/20191213183632.19441-9-axboe@kernel.dk/
-  void do_cancel_list() {
-    std::vector<io_cancel_token> local_copy{};
-    {
-      std::lock_guard lk(mutex_);
-      local_copy.swap(to_cancel_list_);
-    }
-    std::vector<detail::io_awaitable> cancel_awaitables;
-    cancel_awaitables.reserve(local_copy.size());
-    for (auto c : local_copy) {
-      // note that we cannot know if the token is still alive
-      // But io_uring would handle a failed cancellation:
-      // If found, the res field of the cqe will contain 0. If not found, res will contain -ENOENT.
-      // If  found  and attempted  cancelled,  the  res  field will contain -EALREADY.
-      // Notice that disk IO may not be canceled.
-      cancel_awaitables.emplace_back(cancel(c));
-    }
-    // TODO: deal with the result
-    // If need to obtain results with some awaitable fails(but other may still be posted), use when_all_ready instead.
-    // use task instead of direct when_all_awaitable is just for obtaining the result. (But more things to do, may
-    // depresses the performance).
-    my_scope_.spawn([](auto &&cancel_list) -> task<> {
-      [[maybe_unused]] std::vector<int> res = co_await when_all(cancel_list);
-    }(std::move(cancel_awaitables)));
-  }
-  void init() {
-    // NONBLOCK for direct write, no influence on io_uring_read
-    // internal_event_fd_ = ::eventfd(0, EFD_NONBLOCK);
-    internal_event_fd_ = ::eventfd(0, 0);
-    if (internal_event_fd_ == -1) {
-      // TODO: error handling
-      // it's another story.
-      // either use the exception or simply print some logs and abort.
-      // https://isocpp.org/wiki/faq/exceptions#ctors-can-throw
-      throw std::runtime_error("o/s fails to allocate more fd");
-    }
-  }
+  void do_cancel_list() { throw std::invalid_argument("not available in this channel"); }
 
  public:
   inline executor_t as_executor() { return this; }
@@ -874,17 +875,13 @@ class io_context : public coring::detail::io_uring_context {
   void execute(AWAITABLE &&awaitable) {
     // now it was call inside of the wait_for_completion,
     // so it would be submitted soon (at next round of run)
-    my_scope_.spawn(std::move(awaitable));
+    my_scope_.spawn(std::forward<AWAITABLE>(awaitable));
   }
 
   /// Just don't use this, check io_context::spawn(...).
-  void schedule(my_task_t &&awaitable) {
-    std::lock_guard lk(mutex_);
-    todo_list_.emplace_back(std::move(awaitable));
-  }
+  void schedule(my_todo_t &&awaitable) { todo_list_.emplace_back(std::move(awaitable)); }
 
-  void schedule(std::vector<my_task_t> &task_list) {
-    std::lock_guard lk(mutex_);
+  void schedule(std::vector<my_todo_t> &task_list) {
     if (todo_list_.empty()) {
       std::swap(todo_list_, task_list);
     } else {
@@ -918,54 +915,25 @@ class io_context : public coring::detail::io_uring_context {
   /// the context thread, usually new task would be spawned when the get_completion
   /// goes to.
   ///
-  /// But sometimes user may want to run a coroutine that have nothing to do
-  /// with io_uring_context. This should be considered.
+  /// Updates: after some investigation, I think we don't need any multithreading here,
+  /// just forbids it. If we need threading, do our own or checkout another branch to try it out.
   ///
-  /// And we can't afford to lock io_uring_get_sqe, that's unacceptable. If you are
-  /// going to do that, it means the design of the program is bad.
-  ///
-  /// TODO: rewrite this for better performance in multi-threaded condition.
-  /// Right now this spawn is slow (benched), we should use multiple thread accepting concurrently.
-  /// avoiding this slow performance.
-  /// I think we should use a lock-free queue for the task queue,
-  /// during an interview, the interviewer asked me why I didn't use
-  /// lock-free queue for this kind of queues just like what I did in
-  /// the async logger....
-  /// But the problem I think is due to the 'single' restriction, which
-  /// means we need more thread_local memory leakage, so spsc for async
-  /// logger should not be used. Actually,
-  /// I think we can use mpsc wait-free queue to replace both async_logger
-  /// and the todolist queue of io_context. (of course the performance would
-  /// be weaker thanks to more CAS operations compared to spsc one,
-  /// but it is necessary).
-  /// I do have concern on the correctness on lock-free queue, so the queue
-  /// in the project is partially modeling the implementation in the intel
-  /// DPDK library. What I didn't fork is the multi-producer part of it,
-  /// we can take a leap on that.
-  /// in case you need it: https://doc.dpdk.org/guides/prog_guide/ring_lib.html
-  ///
-  /// \tparam thread_check if your task contains a io_uring_context related procedure, and the io_context you
-  ///                      use may not running on the current thread
   /// \param awaitable a task, must be void return such as task<>
-  template <bool thread_check = false>
-  void inline spawn(my_task_t &&awaitable) {
-    if constexpr (thread_check) {
-      if (on_this_thread()) {
-        execute(std::move(awaitable));
-      } else {
-        schedule(std::move(awaitable));
-        // TODO: too many system calls if too many spawn (with thread checking), right now just use spawn<false>.
-        wakeup();
-      }
-    } else {
-      execute(std::move(awaitable));
-    }
-  }
+  void inline spawn(my_todo_t &&awaitable) { execute(std::move(awaitable)); }
 
-  ~io_context() noexcept {
+  ~io_context() noexcept override {
     // have to free resources
     ::close(internal_event_fd_);
+    if (internal_signal_fd_ != -1) {
+      ::close(internal_signal_fd_);
+    }
     // have to co_await async_scope
+    // FIXME: dangerous here.. we lost the scope, memory leaking
+    // we can maintain a list of task/coroutine, then destroy then all, but it's not simple to impl.
+    // another better solution would be using a timeout for all operation, but it damage the performance for
+    // creating lots of linked timeout to the hrtimer in kernel.
+    // a better one should be done using the cancellation, we can just keep a list of user_data (maybe using a
+    // std::unordered_set) and cancel all of them.
     [a = this]() -> async_run { co_await a->my_scope_.join(); }();
   }
 
@@ -979,6 +947,9 @@ class io_context : public coring::detail::io_uring_context {
     stopped_ = false;
     init_eventfd();
     // do scheduled tasks
+    if (internal_signal_fd_ != -1) {
+      init_signalfd(signal_func_);
+    }
     do_todo_list();
     init_timeout_callback();
     while (!stopped_) {
@@ -1007,29 +978,32 @@ class io_context : public coring::detail::io_uring_context {
   void stop() {
     if (reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0)) == this) {
       stopped_ = true;
+    } else {
+      // lazy stop
+      // notify this context, then fall into the run()-while loop-break,
+      notify(EV_STOP_MSG);
     }
-    // lazy stop
-    // notify this context, then fall into the run()-while loop-break,
-    notify(EV_STOP_MSG);
   }
 
  private:
   // io_uring_context engine inherited from uio
   // a event fd for many uses
   int internal_event_fd_{-1};
+  int internal_signal_fd_{-1};
   std::mutex mutex_;
   // no volatile for all changes are made in the same thread
   // not using stop_token for better performance.
   // TODO: should we use a atomic and stop using eventfd msg to demux ?
   bool stopped_{true};
   // for co_spawn
-  std::vector<my_task_t> todo_list_{};
+  std::vector<my_todo_t> todo_list_{};
   // TODO: I won't deal with cancellation now...(1)
   // for cancelling
   std::vector<io_cancel_token> to_cancel_list_{};
   coring::async_scope my_scope_{};
   coring::timer timer_{};
   coring::single_consumer_async_auto_reset_event timer_event_;
+  __sighandler_t signal_func_{nullptr};
 };
 }  // namespace coring
 

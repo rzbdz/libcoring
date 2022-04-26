@@ -22,8 +22,16 @@ class socket : public file_descriptor {
   net::endpoint local_endpoint();
   net::endpoint peer_endpoint();
 
-  detail::io_awaitable read_some(char *dst, size_t nbytes) {
+  inline detail::io_awaitable read_some(char *dst, size_t nbytes) {
     return coro::get_io_context_ref().recv(fd_, (void *)dst, (unsigned)nbytes, 0);
+  }
+
+  template <typename Duration>
+  detail::io_awaitable read_some(char *dst, size_t nbytes, Duration &&dur) {
+    auto read_awaitable = coro::get_io_context_ref().recv(fd_, (void *)dst, (unsigned)nbytes, 0);
+    auto k = make_timespec(std::forward<Duration>(dur));
+    coro::get_io_context_ref().link_timeout(&k);
+    return read_awaitable;
   }
 
   bool is_self_connect();

@@ -10,8 +10,9 @@ class file_descriptor {
 
  public:
   file_descriptor(int fd) : fd_(fd) {}
-  [[nodiscard]] detail::io_awaitable close() { return coro::get_io_context_ref().close(fd_); }
+  detail::io_awaitable close() { return coro::get_io_context_ref().close(fd_); }
   operator int() { return fd_; }
+  bool invalid() const { return fd_ < 0; }
 };
 
 }  // namespace coring

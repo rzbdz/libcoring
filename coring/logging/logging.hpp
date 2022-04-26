@@ -113,7 +113,8 @@ class logger {
 #define _LOG_GEN_(level, fmt, ...)                                          \
   if (SHOULD_EMIT(level)) {                                                 \
     coring::logger(__FILE__, __LINE__, level).log(fmt "\n", ##__VA_ARGS__); \
-  } else
+  };                                                                        \
+  static_cast<void>(0)
 
 // macro notes:
 // '#' is for cstring, '##' is for symbol

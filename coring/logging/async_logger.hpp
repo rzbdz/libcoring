@@ -24,6 +24,7 @@
 #include <string>
 #include <thread>
 #include <functional>
+#include <csignal>
 
 #include "coring/coring_config.hpp"
 #include "coring/logging/fmt/format.h"
@@ -59,14 +60,11 @@ class async_logger : noncopyable {
  public:
   void append(std::function<void(output_iterator_t)> &&f, detail::log_entry &e);
 
-  void run() {
-    if (__glibc_unlikely(thread_.joinable())) {
-      stop();
-    }
-    thread_ = std::jthread{[this] { logging_loop(); }};
-    // make sure it 's running then return to caller
-    count_down_latch_.wait();
-  }
+  void run();
+  inline void start() { run(); }
+  inline void enable() { run(); }
+
+  void block_sigint_then_run();
 
   void poll();
   void logging_loop();

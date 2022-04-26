@@ -3,6 +3,8 @@
 cmake-build-wsl-debug/
 cmake-build-wsl-default/
 cmake-build/
+cmake-build-debug/
+cmake-build-release/
 build/
 Makefile
 etc/
@@ -13,4 +15,7 @@ recipes/
 /test/
 *.gch
 *.h.gch
+*.bak
 core
+*.mp4
+*.mp3

@@ -19,3 +19,11 @@ target_link_libraries(short_read_problem uring logging coring_net)
 # simple usage/demo/tests
 add_executable(connect_with_timeout connect_with_timeout.cpp)
 target_link_libraries(connect_with_timeout uring coring_net)
+
+###### not simple demo #####
+## https://stackoverflow.com/questions/34799916/copy-file-from-source-directory-to-binary-directory-using-cmake
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/public/
+        DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/public/)
+# HTTP1.0 GET
+add_executable(http_server http_server.cpp http_helper.cpp)
+target_link_libraries(http_server uring logging coring_net ${CMAKE_THREAD_LIBS_INIT})
