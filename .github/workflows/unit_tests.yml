@@ -46,6 +46,6 @@ jobs:
         # Build your program with the given configuration
         #run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
       - name: Make Tests
-        run: cd ${{github.workspace}}/build/coring/test && make unit_tests
+        run: cd ${{github.workspace}}/build/test && make unit_tests
       - name: Run Tests
-        run: ${{github.workspace}}/build/coring/test/unit_tests
+        run: ${{github.workspace}}/build/test/unit_tests
