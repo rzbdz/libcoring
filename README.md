@@ -68,6 +68,11 @@ void run() {
 
 #### cancellation:
 
+Notice: since `IORING_ASYNC_CANCEL_ANY` in io_uring will soon be released, the development on cancellation part of
+libcoring stalls now. The cancellation branch would be marked decrapted and be deleted soon. By the time the new kernel
+is available, the development would go on with another branch. Codes below may be not supported or supported in newer
+versions.
+
 ```cpp
 task<> connect(io_context *ioc) {
   using namespace std::chrono_literals;
