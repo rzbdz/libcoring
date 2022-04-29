@@ -12,7 +12,6 @@ Makefile
 *.out
 /public/
 /recipes/
-/test/
 *.gch
 *.h.gch
 *.bak

@@ -9,11 +9,9 @@ SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb -std=c++20 -pthrea
 SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall -std=c++20 -pthread")
 
 # PROJECT_SOURCE_DIR is the directory of current cmake path
-include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/include)
 
-add_subdirectory(coring/utils)
-add_subdirectory(coring/net)
-add_subdirectory(coring/logging)
-# add_subdirectory(coring/io)
-add_subdirectory(coring/test)
-add_subdirectory(coring/demo)
+add_subdirectory(source/logging)
+
+add_subdirectory(test)
+add_subdirectory(examples)
