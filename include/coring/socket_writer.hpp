@@ -38,7 +38,7 @@ class socket_writer_base {
     // use send instead of read benefits from internal poll/epoll mechanism (maybe)
     auto n = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
     handle_write_error(n);
-    upper_layer_.pop_front(n);
+    upper_layer_.has_read(n);
     co_return n;
   }
   /// write all to file, we must handle exception
@@ -50,9 +50,9 @@ class socket_writer_base {
     while (n != 0) {
       // LOG_TRACE("co await send");
       auto writed = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-      LOG_TRACE("co await send: {} bytes", writed);
+      // LOG_TRACE("co await send: {} bytes", writed);
       handle_write_error(writed);
-      upper_layer_.pop_front(writed);
+      upper_layer_.has_read(writed);
       n -= writed;
     }
     // FIXME: useless return value...
@@ -111,7 +111,7 @@ inline auto socket_writer(socket so, Args &&...args) {
 /// \return a stateful buffered
 inline auto socket_writer(socket so, selected_buffer &buffer) {
   auto ret = socket_writer_base<fixed_buffer>{so, buffer.data(), buffer.capacity()};
-  ret.raw_buffer().push_back(buffer.readable());
+  ret.raw_buffer().has_written(buffer.readable());
   return ret;
 }
 typedef socket_writer_base<fixed_buffer> fixed_socket_writer;

@@ -41,6 +41,11 @@ class timestamp {
     return std::chrono::duration_cast<std::chrono::microseconds>(lhs.sys_timestamp_.time_since_epoch() -
                                                                  rhs.sys_timestamp_.time_since_epoch());
   }
+  void swap(timestamp &ts) noexcept {
+    std::swap(sys_timestamp_, ts.sys_timestamp_);
+    std::swap(ts.ymd_data_, ts.ymd_data_);
+    std::swap(hms_data_, ts.hms_data_);
+  }
 
  private:
   raw_type sys_timestamp_;

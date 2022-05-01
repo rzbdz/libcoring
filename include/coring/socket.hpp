@@ -53,11 +53,11 @@ class socket : public file_descriptor {
   }
 
   template <typename Duration>
-  detail::io_awaitable read_some(char *dst, size_t nbytes, Duration &&dur) {
-    auto read_awaitable = coro::get_io_context_ref().recv(fd_, (void *)dst, (unsigned)nbytes, 0);
+  task<int> read_some(char *dst, size_t nbytes, Duration &&dur) {
+    auto read_awaitable = coro::get_io_context_ref().recv(fd_, (void *)dst, (unsigned)nbytes, 0, IOSQE_IO_LINK);
     auto k = make_timespec(std::forward<Duration>(dur));
     coro::get_io_context_ref().link_timeout(&k);
-    return read_awaitable;
+    co_return co_await read_awaitable;
   }
 
   bool is_self_connect() {

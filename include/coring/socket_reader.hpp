@@ -45,8 +45,18 @@ class socket_reader_base {
   [[nodiscard]] task<> read_some() {
     upper_layer_.make_room(READ_BUFFER_AT_LEAST_WRITABLE);
     int ret = co_await fd_.read_some(upper_layer_.back(), upper_layer_.writable());
+    // LOG_TRACE("read_some returns: ", ret);
     handle_read_error(ret);
-    upper_layer_.push_back(ret);
+    upper_layer_.has_written(ret);
+  }
+
+  template <class Dur>
+  [[nodiscard]] task<> read_some(Dur &&dur) {
+    upper_layer_.make_room(READ_BUFFER_AT_LEAST_WRITABLE);
+    int ret = co_await fd_.read_some(upper_layer_.back(), upper_layer_.writable(), std::forward<Dur>(dur));
+    // LOG_TRACE("read_some returns: ", ret);
+    handle_read_error(ret);
+    upper_layer_.has_written(ret);
   }
 
   /// read certain bytes. I don't think we need a read_some method
@@ -64,7 +74,7 @@ class socket_reader_base {
       co_await read_some();
     }
     ::memcpy(dest, upper_layer_.front(), nbytes);
-    upper_layer_.pop_front(nbytes);
+    upper_layer_.has_read(nbytes);
   }
 
   task<std::string_view> read_till_certain(size_t nbytes) {
@@ -109,7 +119,7 @@ class socket_reader_base {
     ::memcpy(dest, upper_layer_.front(), len);
     // TODO: I don't know if this is necessary.
     // place[len] = '\0';
-    upper_layer_.pop_front(len);
+    upper_layer_.has_read(len);
   }
 
   task<std::string_view> read_till_line(char *dest) {
@@ -156,7 +166,7 @@ class socket_reader_base {
     ::memcpy(dest, upper_layer_.front(), len);
     // TODO: I don't know if this is necessary.
     // place[len] = '\0';
-    upper_layer_.pop_front(len);
+    upper_layer_.has_read(len);
   }
 
   task<std::string_view> read_till_crlf() {
@@ -203,7 +213,7 @@ class socket_reader_base {
     ::memcpy(dest, upper_layer_.front(), len);
     // TODO: I don't know if this is necessary.
     // place[len] = '\0';
-    upper_layer_.pop_front(len);
+    upper_layer_.has_read(len);
   }
 
   task<std::string_view> read_till_2crlf() {

@@ -1,6 +1,6 @@
 #include "coring/detail/debug.hpp"
 #include "coring/io_context.hpp"
-#include "coring/thread.hpp"
+#include "coring/detail/thread.hpp"
 #include "coring/timeout.hpp"
 #include <thread>
 #include <chrono>

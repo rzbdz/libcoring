@@ -17,7 +17,7 @@ task<> short_read() {
     //    80));
     tcp::peer_connection con = co_await tcp::connect_to({"127.0.0.1", 11243});
     auto t = socket_writer(con, request_get);
-    t.raw_buffer().push_back(sizeof(request_get));
+    t.raw_buffer().has_written(sizeof(request_get));
     co_await t.write_all_to_file();
     // use raw interface to test short read (short count) problem
     int ret = co_await coro::get_io_context_ref().read(con, buf, 56637, 0);

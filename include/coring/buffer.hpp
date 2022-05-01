@@ -54,7 +54,7 @@ class buffer_base : noncopyable {
  public:
   void clear() { index_read_ = index_write_ = 0; }
 
-  void pop_front(size_t len) {
+  void has_read(size_t len) {
     assert(len <= readable());
     if (len == readable()) {
       //      LDR("pop_front %lu, but is larger, clear all", len);
@@ -82,7 +82,7 @@ class buffer_base : noncopyable {
       len = readable();
     }
     std::string ret(front(), len);
-    pop_front(len);
+    has_read(len);
     return ret;
   }
 
@@ -92,7 +92,7 @@ class buffer_base : noncopyable {
     assert(readable() >= sizeof(IntType));
     IntType ret = 0;
     ::memcpy(&ret, front(), sizeof(IntType));
-    pop_front(sizeof(IntType));
+    has_read(sizeof(IntType));
     return coring::net::network_to_host(ret);
   }
 
@@ -103,7 +103,7 @@ class buffer_base : noncopyable {
 
   char *back() { return container_.data() + index_write_; }
 
-  void push_back(size_t len) {
+  void has_written(size_t len) {
     //    LDR("increase length by %lu, ori:", len);
     index_write_ += len;
     //    LDR("now:");
@@ -191,6 +191,7 @@ class fixed_buffer : public detail::buffer_base<detail::buffer_view> {
       // container_.resize(index_write_ + want);
     }
   }
+
   /// it won't call make_room internal
   void emplace_back(char ch) {
     //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
@@ -200,8 +201,14 @@ class fixed_buffer : public detail::buffer_base<detail::buffer_view> {
     // ::memcpy(dst, src, len);
     *dst = ch;
     //    LDR("after copy, first byte in dst: %d", (int)(*dst));
-    push_back(1);
+    has_written(1);
   }
+
+  void push_back(char ch) {
+    make_room(1);
+    emplace_back(ch);
+  }
+
   /// You don't need to make room.
   void emplace_back(const void *src, size_t len) {
     //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
@@ -210,7 +217,7 @@ class fixed_buffer : public detail::buffer_base<detail::buffer_view> {
     //    LDR("back: 0x%lx", (size_t)dst);
     ::memcpy(dst, src, len);
     //    LDR("after copy, first byte in dst: %d", (int)(*dst));
-    push_back(len);
+    has_written(len);
   }
 
   // put int/string to data
@@ -233,7 +240,9 @@ class flex_buffer : public detail::buffer_base<std::vector<char>> {
   typedef detail::buffer_base<std::vector<char>> FatherType;
 
  public:
+  typedef char value_type;
   explicit flex_buffer(int init_size = BUFFER_DEFAULT_SIZE) : FatherType{std::vector<char>(init_size)} {}
+
   void make_room(size_t want) {
     //    LDR("make room: %lu", want);
     if (index_read_ > 0) {
@@ -258,7 +267,12 @@ class flex_buffer : public detail::buffer_base<std::vector<char>> {
     // ::memcpy(dst, src, len);
     *dst = ch;
     //    LDR("after copy, first byte in dst: %d", (int)(*dst));
-    push_back(1);
+    has_written(1);
+  }
+
+  void push_back(char ch) {
+    make_room(1);
+    emplace_back(ch);
   }
 
   /// You don't need to make room.
@@ -269,7 +283,7 @@ class flex_buffer : public detail::buffer_base<std::vector<char>> {
     //    LDR("back: 0x%lx", (size_t)dst);
     ::memcpy(dst, src, len);
     //    LDR("after copy, first byte in dst: %d", (int)(*dst));
-    push_back(len);
+    has_written(len);
   }
 
   // put int/string to data

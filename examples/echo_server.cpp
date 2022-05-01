@@ -36,8 +36,8 @@ char buf[BUFFERS_COUNT * MAX_MESSAGE_LEN] = {0};
 
 buffer_pool::id_t GID("AB");
 
-struct EchoServer {
-  EchoServer(__u16 port) : acceptor{"0.0.0.0", port} {
+struct GetMan {
+  GetMan(__u16 port) : acceptor{"0.0.0.0", port} {
     acceptor.enable();
     LOG_INFO("echo server constructed, will be run on port: {}", port);
   }
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
     std::cout << "Please give a port number: ./echo_server [port: u16] [logger on: any]" << std::endl;
     exit(0);
   }
-  EchoServer server{port};
+  GetMan server{port};
   if (logger_on) {
     async_logger logger{"echo_server"};
     logger.start();

@@ -29,7 +29,7 @@ task<> send_200_then_quit(tcp::connection conn) {
     //    [[maybe_unused]] auto str = co_await wrapper.read_till_2crlf();
     co_await reader.read_some();
     auto writer = socket_writer(conn, response200);
-    writer.raw_buffer().push_back(sizeof(response200));
+    writer.raw_buffer().has_written(sizeof(response200));
     co_await writer.write_all_to_file();
   } catch (std::exception &e) {
     std::cout << "inside read " << e.what() << std::endl;

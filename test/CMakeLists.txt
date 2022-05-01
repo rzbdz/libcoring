@@ -17,6 +17,9 @@ target_link_libraries(buffer_test gtest gtest_main ${CMAKE_THREAD_LIBS_INIT})
 #buffer selection
 add_executable(buffer_selection_test buffer_selection_test.cpp)
 target_link_libraries(buffer_selection_test gtest gtest_main ${CMAKE_THREAD_LIBS_INIT})
+#buffer selection
+#add_executable(context_pool_test context_pool_test.cpp)
+#target_link_libraries(context_pool_test gtest gtest_main ${CMAKE_THREAD_LIBS_INIT})
 # For github Actions.
 add_executable(
         unit_tests

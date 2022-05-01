@@ -99,8 +99,13 @@ class io_uring_context : noncopyable {
       auto coro = static_cast<io_token *>(io_uring_cqe_get_data(cqe));
       // support the timeout enter, if we have kernel support EXT_ARG
       // then this would be unnecessary
-      if (coro != nullptr && coro != reinterpret_cast<void *>(LIBURING_UDATA_TIMEOUT))
+      if (coro != nullptr && coro != reinterpret_cast<void *>(LIBURING_UDATA_TIMEOUT)) {
         coro->resolve(cqe->res, cqe->flags);
+      }
+      //      } else {
+      //        LOG_TRACE("a detached event {} returns a result: res: {}, flag: {}", (void *)coro, cqe->res,
+      //        cqe->flags);
+      //      }
     }
     io_uring_cq_advance(&ring, cqe_count);
     cqe_count = 0;
@@ -124,6 +129,9 @@ class io_uring_context : noncopyable {
     auto *sqe = io_uring_get_sqe_safe();
     io_uring_prep_link_timeout(sqe, ts, flags);
     io_uring_sqe_set_flags(sqe, iflags);
+    // FIXME: it may report an error like invalid argument or sth, we should not detach it,
+    // we can reap these events together in a worker.
+    io_uring_sqe_set_data(sqe, nullptr);  // make sure it's detached...
   }
   /**
    * A helper method

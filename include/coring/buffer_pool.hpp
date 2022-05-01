@@ -84,7 +84,6 @@ class selected_buffer_resource : noncopyable {
   selected_buffer_resource(selected_buffer_resource &&rhs) noexcept : val(rhs.val) { rhs.val = nullptr; }
   ~selected_buffer_resource() {
     /// FIXME: if the return value is <=0, we have big problem...
-    /// TODO: I prefer TODO...
     /// You may want to have a look on: P1662 Adding async RAII support to coroutines, FYI:
     /// @see https://github.com/cplusplus/papers/issues?q=RAII
     if (val != nullptr) {
@@ -193,7 +192,7 @@ class buffer_pool_base {
       throw std::system_error(std::error_code{-res, std::system_category()});
     }
     auto &g = it->second;
-    g.blocks[flag].push_back(res);
+    g.blocks[flag].has_written(res);
     co_return g.blocks[flag];
   }
 

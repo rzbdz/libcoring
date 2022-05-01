@@ -1,6 +1,6 @@
 
 #include <coring/logging.hpp>
-#include <coring/thread.hpp>
+#include "coring/detail/thread.hpp"
 
 namespace coring {
 log_level LOG_LEVEL = LOG_LEVEL_CNT;
@@ -10,7 +10,7 @@ logger::submit_interface logger::submitter_;
 const char *logger::log_level_map_[] = {"TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"};
 
 logger::logger(file_name_t file, int line, log_level level)
-    : log_entry_{file, line, level, coring::thread::tid_string()} {}
+    : log_entry_{file, line, level, coring::detail::thread::tid_string()} {}
 
 }  // namespace coring
 

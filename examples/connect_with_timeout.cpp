@@ -1,5 +1,7 @@
 
 #include "coring/tcp_connection.hpp"
+#include "coring/async_logger.hpp"
+
 #include <thread>
 #include <iostream>
 using namespace coring;
@@ -21,6 +23,9 @@ task<> connect(io_context *ioc) {
 }
 
 int main() {
+  async_logger logger{};
+  logger.enable();
+  coring::set_log_level(TRACE);
   io_context ctx;
   ctx.schedule(connect(&ctx));
   ctx.run();
