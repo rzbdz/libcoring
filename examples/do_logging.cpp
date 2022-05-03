@@ -34,8 +34,9 @@ void multi_thread_async(int time, int divide) {
     LOG_DEBUG("{}", 123);
     t0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < scale; i++) {
-      LOG_DEBUG("agasfgsagasf {}{:.3f}{}", 1234567, 1.6454, i);
-      // LOG_DEBUG("agasfgsagasf {}{}", 1234567 , i);
+      LOG_DEBUG(
+          "Initialized InfUdDriver buffers: {} receive buffers ({} MB), {} transmit buffers ({} MB), took {:.1f} ms",
+          50000, 97, 50, 0, 26.2);
     }
     t1 = std::chrono::high_resolution_clock::now();
     double span1 = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0).count();
@@ -60,7 +61,8 @@ int main(int argc, char *argv[]) {
   if (argc < 4) {
     std::cout << "No, you have to input args:\n"
                  "- For multi-thread(3), use \"./program-name -m [multiple factor] [division factor]\"\n"
-                 "- For single-thread, use \"./program-name -s [multiple factor] [division factor] \""
+                 "multiple factor and division factor suggest a `(mf/df)*ring_size` msgs would be logged in a loop"
+                 "- For single-thread, use \"./program-name -s\""
               << std::endl;
     return 0;
   }

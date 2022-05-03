@@ -72,8 +72,12 @@ class HttpRequest : public ::coring::copyable {
   }
 
   void setPath(const char *start, const char *end) {
-    path_.assign("public");
-    path_.append(start, end - start);
+    if (start == (end - 1) && *start == '/') {
+      path_.assign("public/index.html");
+    } else {
+      path_.assign("public");
+      path_.append(start, end - start);
+    }
     // LOG_TRACE("the req path is: {}", path_);
   }
 
@@ -83,17 +87,15 @@ class HttpRequest : public ::coring::copyable {
 
   const string &query() const { return query_; }
 
-  void setReceiveTime(timestamp t) { receiveTime_ = t; }
-
-  timestamp receiveTime() const { return receiveTime_; }
-
   void addHeader(const char *start, const char *colon, const char *end) {
     string field(start, colon);
+    // std::transform(field.begin(), field.end(), field.begin(), [](unsigned char c) { return std::tolower(c); });
     ++colon;
     while (colon < end && isspace(*colon)) {
       ++colon;
     }
     string value(colon, end);
+    // std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return std::tolower(c); });
     while (!value.empty() && isspace(value[value.size() - 1])) {
       value.resize(value.size() - 1);
     }
@@ -109,6 +111,12 @@ class HttpRequest : public ::coring::copyable {
     return result;
   }
 
+  bool keepalive() const {
+    const string &connection = getHeader("Connection");
+    auto close = connection == "close" || (getVersion() == HttpRequest::kHttp10 && connection != "Keep-Alive");
+    return close;
+  }
+
   const std::map<string, string> &headers() const { return headers_; }
 
   void swap(HttpRequest &that) {
@@ -116,7 +124,6 @@ class HttpRequest : public ::coring::copyable {
     std::swap(version_, that.version_);
     path_.swap(that.path_);
     query_.swap(that.query_);
-    receiveTime_.swap(that.receiveTime_);
     headers_.swap(that.headers_);
   }
 
@@ -125,7 +132,6 @@ class HttpRequest : public ::coring::copyable {
   Version version_;
   string path_;
   string query_;
-  timestamp receiveTime_;
   std::map<string, string> headers_;
 };
 

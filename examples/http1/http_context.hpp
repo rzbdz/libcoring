@@ -28,7 +28,7 @@ class HttpContext : public coring::copyable {
   // default copy-ctor, dtor and assignment are fine
 
   // return false if any error
-  bool parseRequest(flex_buffer *buf, timestamp receiveTime) {
+  bool parseRequest(flex_buffer *buf) {
     bool ok = true;
     bool hasMore = true;
     while (hasMore) {
@@ -38,7 +38,6 @@ class HttpContext : public coring::copyable {
         if (crlf) {
           ok = processRequestLine(buf->front(), crlf);
           if (ok) {
-            request_.setReceiveTime(receiveTime);
             buf->has_read((crlf + 2) - buf->front());
             state_ = kExpectHeaders;
           } else {

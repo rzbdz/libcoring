@@ -93,7 +93,6 @@ class io_uring_context : noncopyable {
   void handle_completions() {
     io_uring_cqe *cqe;
     unsigned head;
-
     io_uring_for_each_cqe(&ring, head, cqe) {
       ++cqe_count;
       auto coro = static_cast<io_token *>(io_uring_cqe_get_data(cqe));
@@ -626,15 +625,24 @@ class io_uring_context : noncopyable {
     if (__builtin_expect(!!sqe, true)) {
       return sqe;
     } else {
-      // If no sqe available, just try to submit it to kernel.
-      // Here would block !!
-      io_uring_cq_advance(&ring, cqe_count);
-      cqe_count = 0;
-      //  On success io_uring_submit(3) returns the number of submitted submission queue entries.
-      io_uring_submit(&ring);
-      sqe = io_uring_get_sqe(&ring);
-      if (__builtin_expect(!!sqe, true)) return sqe;
-      panic("io_uring_get_sqe", ENOMEM);
+      while (true) {
+        LOG_DEBUG_RAW("fuck inf spin");
+        // If no sqe available, just try to submit it to kernel.
+        // Here would block !!
+        io_uring_cq_advance(&ring, cqe_count);
+        cqe_count = 0;
+        // On success io_uring_submit(3) returns the number of submitted submission queue entries.
+        // with SQPOLL on, return value cannot be used.
+        io_uring_submit(&ring);
+        // make sure SQPOLL thread is running.
+        LOG_DEBUG_RAW("go sqring_wait");
+        io_uring_sqring_wait(&ring);
+        LOG_DEBUG_RAW("sqring_wait go back, fuck?");
+        sqe = io_uring_get_sqe(&ring);
+        if (__builtin_expect(!!sqe, true)) return sqe;
+        // TODO: after spin a while, we should throw
+        // panic("io_uring_get_sqe", ENOMEM);
+      }
     }
   }
 

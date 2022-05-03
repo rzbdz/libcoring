@@ -83,7 +83,7 @@ class selected_buffer_resource : noncopyable {
   explicit selected_buffer_resource(selected_buffer &val) : val(&val) {}
   selected_buffer_resource(selected_buffer_resource &&rhs) noexcept : val(rhs.val) { rhs.val = nullptr; }
   ~selected_buffer_resource() {
-    /// FIXME: if the return value is <=0, we have big problem...
+    /// FIXME: if the return value is <=0, we have problems...
     /// You may want to have a look on: P1662 Adding async RAII support to coroutines, FYI:
     /// @see https://github.com/cplusplus/papers/issues?q=RAII
     if (val != nullptr) {
@@ -92,7 +92,9 @@ class selected_buffer_resource : noncopyable {
       val->clear();
     }
   }
-  selected_buffer &get() { return *val; }
+  selected_buffer *get() { return val; }
+  selected_buffer *operator->() { return val; }
+  selected_buffer &operator*() { return get(); }
 
  private:
   selected_buffer *val;
@@ -119,7 +121,7 @@ class buffer_pool_base {
 
  public:
   typedef detail::buffer_id_t id_t;
-  buffer_pool_base() {}
+  buffer_pool_base() = default;
 
   void return_back(selected_buffer &val) {
     val.clear();
@@ -149,7 +151,7 @@ class buffer_pool_base {
   //      std::cout << "a.id: " << a.buf_id_ << ", a.sz: " << a.size() << ", a.writable" << a.writable() << "\n";
   //    }
   //  }
-  task<> provide_group_contiguous(char *base, __u16 nbytes_per_block, int how_many_blocks, id_t g_name) {
+  async_task<> provide_group_contiguous(char *base, __u16 nbytes_per_block, int how_many_blocks, id_t g_name) {
     auto ret = co_await ContextService::get_io_context_ref().provide_buffers(base, nbytes_per_block, how_many_blocks,
                                                                              g_name, 0);
     if (ret < 0) {
@@ -182,7 +184,7 @@ class buffer_pool_base {
   /// \param g_name
   /// \param nbytes
   /// \return
-  task<selected_buffer &> try_read_block(int fd, id_t g_name, off_t offset = 0) {
+  async_task<selected_buffer_resource<ContextService>> read(int fd, id_t g_name, off_t offset = 0) {
     auto it = find_group(g_name);
     int nbytes = it->second.nbytes_per_block;
     // LOG_TRACE("co await read buffer_select");
@@ -193,7 +195,7 @@ class buffer_pool_base {
     }
     auto &g = it->second;
     g.blocks[flag].has_written(res);
-    co_return g.blocks[flag];
+    co_return selected_buffer_resource<ContextService>{g.blocks[flag]};
   }
 
  private:

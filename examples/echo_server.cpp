@@ -18,11 +18,10 @@
 #include "coring/timeout.hpp"
 #include "coring/socket_writer.hpp"
 
-#define catch_it_then(then)    \
+#define catch_it               \
   catch (std::exception & e) { \
     LOG_DEBUG("{}", e.what()); \
   }                            \
-  then;                        \
   static_cast<void>(0)
 #define do_nothing static_cast<void>(0)
 
@@ -36,24 +35,22 @@ char buf[BUFFERS_COUNT * MAX_MESSAGE_LEN] = {0};
 
 buffer_pool::id_t GID("AB");
 
-struct GetMan {
-  GetMan(__u16 port) : acceptor{"0.0.0.0", port} {
+struct EchoServer {
+  EchoServer(__u16 port) : acceptor{"0.0.0.0", port} {
     acceptor.enable();
     LOG_INFO("echo server constructed, will be run on port: {}", port);
   }
 
-  task<> echo_loop(tcp::connection conn) {
+  task<> echo_loop(std::unique_ptr<tcp::connection> conn) {
     try {
       while (true) {
-        auto &read_buffer = co_await pool.try_read_block(conn, GID);
-        LOG_INFO("read,bid: {} sz: {}", read_buffer.buffer_id(), read_buffer.readable());
-        selected_buffer_resource on_scope_exit{read_buffer};
-        auto writer = socket_writer(conn, read_buffer);
-        co_await writer.write_all_to_file();
+        auto read_buffer = co_await pool.read(conn->fd(), GID);
+        LOG_INFO("read,bid: {} sz: {}", read_buffer->buffer_id(), read_buffer->readable());
+        co_await write_all(conn.get(), read_buffer.get());
         LOG_INFO("written");
       }
     }
-    catch_it_then(co_await conn.close());  // prevent async punt, just don't use co_await conn.shutdown()
+    catch_it;  // prevent async punt, just don't use co_await conn.shutdown()
   }
 
   task<> event_loop() {
@@ -63,10 +60,10 @@ struct GetMan {
         LOG_TRACE("co await accept");
         auto conn = co_await acceptor.accept();
         LOG_INFO("accepted one, spawn handler");
-        coro::spawn(echo_loop(conn));
+        co_spawn(echo_loop(std::move(conn)));
       }
     }
-    catch_it_then(do_nothing);
+    catch_it;
   }
 
   void run() {
@@ -89,11 +86,11 @@ int main(int argc, char *argv[]) {
     std::cout << "Please give a port number: ./echo_server [port: u16] [logger on: any]" << std::endl;
     exit(0);
   }
-  GetMan server{port};
+  EchoServer server{port};
   if (logger_on) {
     async_logger logger{"echo_server"};
     logger.start();
-    set_log_level(TRACE);  // no logging output by default
+    set_log_level(INFO);  // no logging output by default
     server.run();
   } else {
     server.run();

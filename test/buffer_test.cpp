@@ -14,7 +14,7 @@ class CORING_TEST_CLASS {
     assert(bf.readable() == 0);
     assert(bf.writable() == 1024);
     int32_t test = 0x78654321;
-    bf.emplace_back_int(static_cast<uint32_t>(test));
+    bf.push_back_int(static_cast<uint32_t>(test));
     ASSERT_EQ(bf.capacity(), 1024);
     EXPECT_EQ(bf.index_read_, 0);
     EXPECT_EQ(bf.index_write_, 4);
@@ -38,23 +38,23 @@ class CORING_TEST_CLASS {
 
     for (int i = 0; i < scale;) {
       uint64_t u64 = *reinterpret_cast<uint64_t *>(&big_buf[i]);
-      bf.emplace_back_int(u64);
+      bf.push_back_int(u64);
       ASSERT_EQ((*reinterpret_cast<const uint64_t *>(bf.back() - 8)), coring::net::host_to_network(u64));
       i += 8;
       uint32_t u32 = *reinterpret_cast<uint32_t *>(&big_buf[i]);
-      bf.emplace_back_int(u32);
+      bf.push_back_int(u32);
       ASSERT_EQ((*reinterpret_cast<const uint32_t *>(bf.back() - 4)), coring::net::host_to_network(u32));
       i += 4;
       uint16_t u16 = *reinterpret_cast<uint16_t *>(&big_buf[i]);
-      bf.emplace_back_int(u16);
+      bf.push_back_int(u16);
       ASSERT_EQ((*reinterpret_cast<const uint16_t *>(bf.back() - 2)), coring::net::host_to_network(u16));
       i += 2;
       uint8_t u8 = *reinterpret_cast<uint8_t *>(&big_buf[i]);
-      bf.emplace_back_int(u8);
+      bf.push_back_int(u8);
       ASSERT_EQ((*reinterpret_cast<const uint8_t *>(bf.back() - 1)), coring::net::host_to_network(u8));
       i += 1;
       u8 = *reinterpret_cast<uint8_t *>(&big_buf[i]);
-      bf.emplace_back_int(u8);
+      bf.push_back_int(u8);
       ASSERT_EQ((*reinterpret_cast<const uint8_t *>(bf.back() - 1)), coring::net::host_to_network(u8));
       i += 1;
     }
@@ -89,7 +89,7 @@ class CORING_TEST_CLASS {
     assert(bf.readable() == 0);
     assert(bf.writable() == 1024);
     uint32_t test = 0x78654321;
-    // bf.emplace_back_int(static_cast<uint32_t>(test));
+    // bf.push_back_int(static_cast<uint32_t>(test));
     *(reinterpret_cast<uint32_t *>(bf.back())) = coring::net::network_to_host(test);
     bf.has_written(4);
     ASSERT_EQ(bf.capacity(), 1024);
@@ -116,7 +116,7 @@ class CORING_TEST_CLASS {
 
     for (int i = 0; i < scale;) {
       uint64_t u64 = *reinterpret_cast<uint64_t *>(&big_buf[i]);
-      // bf.emplace_back_int(static_cast<uint32_t>(test));
+      // bf.push_back_int(static_cast<uint32_t>(test));
       *(reinterpret_cast<uint64_t *>(bf.back())) = coring::net::host_to_network(u64);
       bf.has_written(8);
       ASSERT_EQ((*reinterpret_cast<const uint64_t *>(bf.back() - 8)), coring::net::host_to_network(u64));

@@ -31,11 +31,33 @@ class HttpResponse : public coring::copyable {
   };
 
   explicit HttpResponse(bool close) : statusCode_(kUnknown), closeConnection_(close) {}
+  explicit HttpResponse() : statusCode_(kUnknown), closeConnection_(false) {}
 
-  void setStatusCode(HttpStatusCode code) { statusCode_ = code; }
+  void setStatusCode(HttpStatusCode code) {
+    statusCode_ = code;
+    switch (statusCode_) {
+      case kUnknown:
+        // setStatusMessage("");
+        break;
+      case k200Ok:
+        setStatusMessage("OK");
+        break;
+      case k301MovedPermanently:
+        setStatusMessage("Move Permanently");
+        break;
+      case k400BadRequest:
+        setStatusMessage("Bad Request");
+        break;
+      case k404NotFound:
+        setStatusMessage("Not Found");
+        break;
+    }
+  }
 
+ private:
   void setStatusMessage(const string &message) { statusMessage_ = message; }
 
+ public:
   void setCloseConnection(bool on) { closeConnection_ = on; }
 
   bool closeConnection() const { return closeConnection_; }

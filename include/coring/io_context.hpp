@@ -48,8 +48,7 @@ struct coro {
   void static provide(io_context *ctx) { io_context_thread_local = ctx; }
   /// Just make sure you are in a coroutine before calling this,
   /// it's not the same spawn as the one in boost::asio.
-  inline static void spawn(task<> &&t) { /*get_io_context_ref().spawn(std::move(t)); */
-  }
+  inline static void spawn(task<> &&t) {}
 };
 }  // namespace coring
 
@@ -270,7 +269,10 @@ class io_context : public coring::detail::io_uring_context {
   /// just forbids it. If we need threading, do our own or checkout another branch to try it out.
   ///
   /// \param awaitable a task, must be void return such as task<>
-  void inline spawn(my_todo_t &&awaitable) { execute(std::move(awaitable)); }
+  template <typename AWAITABLE>
+  void inline spawn(AWAITABLE &&awaitable) {
+    execute(std::forward<AWAITABLE>(awaitable));
+  }
 
   ~io_context() noexcept override {
     // have to free resources

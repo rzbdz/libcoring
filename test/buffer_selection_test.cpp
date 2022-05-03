@@ -99,7 +99,7 @@ async_task<> SimpleProvideOneGroup(buffer_pool_base<MockService> &pool) {
   int many = 0xA;
   co_await pool.provide_group_contiguous(ptr, len, many, "AC");
   {
-    auto buffer_view = selected_buffer_resource<MockService>{co_await pool.try_read_block(0, "AC")};
+    auto buffer_view = co_await pool.read(0, "AC");
     auto &buffer = buffer_view.get();
     LDR("%ld", buffer.size());
     // only expect can be used...
@@ -107,14 +107,14 @@ async_task<> SimpleProvideOneGroup(buffer_pool_base<MockService> &pool) {
   }
   for (auto i = 0; i < many; i++) {
     try {
-      [[maybe_unused]] auto &bf = co_await pool.try_read_block(0, "AC");
+      [[maybe_unused]] auto &bf = co_await pool.read(0, "AC");
     } catch (std::system_error &e) {
       LDR("%s", e.what());
       EXPECT_EQ("Should not run out for a resource managed", "thrown");
     }
   }
   try {
-    [[maybe_unused]] auto &bf = co_await pool.try_read_block(0, "AC");
+    [[maybe_unused]] auto bf = co_await pool.read(0, "AC");
   } catch (std::system_error &e) {
     LDR("%s", e.what());
     EXPECT_EQ("Should run-out", "Should run-out");
