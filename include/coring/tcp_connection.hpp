@@ -49,8 +49,7 @@ inline int new_socket_safe() {
   return fd;
 }
 
-inline auto make_unique_socket() { return std::make_unique<socket>(new_socket_safe()); }
-inline auto make_shared_socket() { return std::make_shared<socket>(new_socket_safe()); }
+inline auto make_socket() { return socket(new_socket_safe()); }
 
 struct empty {
   explicit empty(const net::endpoint &) {
@@ -94,6 +93,7 @@ class connection_base : public socket, public AddrOption {
   connection_base(socket &&so, const net::endpoint &local, const net::endpoint &peer)
       : socket{std::move(so)}, AddrOption(local, peer) {}
   connection_base(socket &&so, const net::endpoint &end) : socket{std::move(so)}, AddrOption(end) {}
+  connection_base(connection_base &&rhs) : socket(std::move(rhs)), AddrOption(std::move(rhs)) {}
   ~connection_base() override = default;
 
   template <typename ToOtherAddr>
@@ -213,11 +213,11 @@ typedef connection_base<socket_endpoints> socket_connection;
 /// \return if you want to get a shared_ptr instead, just move it.
 /// ctor 13 at: https://en.cppreference.com/w/cpp/memory/shared_ptr/shared_ptr
 template <typename CONN_TYPE = connection>
-task<std::unique_ptr<CONN_TYPE>> connect_to(const net::endpoint &peer) {
+task<CONN_TYPE> connect_to(const net::endpoint &peer) {
   int fd = tcp::new_socket_safe();
   int ret = co_await coro::get_io_context_ref().connect(fd, peer.as_sockaddr(), net::endpoint::len);
   detail::_tcp_connection_helper::handle_connect_error(-ret, fd);
-  co_return std::make_unique<CONN_TYPE>(fd);
+  co_return CONN_TYPE(fd);
 }
 
 /// It' s not safe for it create a socket fd implicitly,
@@ -234,7 +234,7 @@ task<std::unique_ptr<CONN_TYPE>> connect_to(const net::endpoint &peer) {
 ///  \param dur a time(relative duration)
 ///  \return if you want to get a shared_ptr instead, just move it.
 template <typename CONN_TYPE = connection, typename Duration>
-requires(!std::is_same_v<std::remove_cvref<Duration>, net::endpoint>) task<std::unique_ptr<CONN_TYPE>> connect_to(
+requires(!std::is_same_v<std::remove_cvref<Duration>, net::endpoint>) task<CONN_TYPE> connect_to(
     const net::endpoint &peer, Duration &&dur) {
   int fd = tcp::new_socket_safe();
   auto connd_awaitable = coro::get_io_context_ref().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
@@ -242,7 +242,7 @@ requires(!std::is_same_v<std::remove_cvref<Duration>, net::endpoint>) task<std::
   coro::get_io_context_ref().link_timeout(&k);
   int ret = co_await connd_awaitable;
   detail::_tcp_connection_helper::handle_connect_error(-ret, fd);
-  co_return std::make_unique<CONN_TYPE>(fd);
+  co_return CONN_TYPE(fd);
 }
 /// It' s not safe for it create a socket fd implicitly,
 /// If an exception is thrown, fd might be closed, might not...
@@ -259,7 +259,7 @@ requires(!std::is_same_v<std::remove_cvref<Duration>, net::endpoint>) task<std::
 /// \param dur a time(relative duration)
 /// \return if you want to get a shared_ptr instead, just move it.
 template <typename CONN_TYPE = connection, typename Duration>
-task<std::unique_ptr<CONN_TYPE>> connect_to(const net::endpoint &local, const net::endpoint &peer, Duration &&dur) {
+task<CONN_TYPE> connect_to(const net::endpoint &local, const net::endpoint &peer, Duration &&dur) {
   int fd = tcp::new_socket_safe();
   safe_bind_socket(fd, local.as_sockaddr());
   auto connd_awaitable = coro::get_io_context_ref().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
@@ -267,7 +267,7 @@ task<std::unique_ptr<CONN_TYPE>> connect_to(const net::endpoint &local, const ne
   coro::get_io_context_ref().link_timeout(&k);
   int ret = co_await connd_awaitable;
   detail::_tcp_connection_helper::handle_connect_error(-ret, fd);
-  co_return std::make_unique<CONN_TYPE>(fd, local, peer);
+  co_return CONN_TYPE(fd, local, peer);
 }
 /// The user need to create a socket by calling ::socket.../ or just tcp::new_socket_safe()
 /// this make sure the fd is maintained by caller, which can remake or freed even when
@@ -283,13 +283,13 @@ task<std::unique_ptr<CONN_TYPE>> connect_to(const net::endpoint &local, const ne
 /// \param dur a time(relative duration)
 /// \return
 template <typename CONN_TYPE = connection, typename Duration>
-task<std::unique_ptr<CONN_TYPE>> connect_to(int fd, const net::endpoint &peer, Duration &&dur) {
+task<CONN_TYPE> connect_to(int fd, const net::endpoint &peer, Duration &&dur) {
   auto connd_awaitable = coro::get_io_context_ref().connect(fd, peer.as_sockaddr(), net::endpoint::len, IOSQE_IO_LINK);
   auto k = make_timespec(std::forward<Duration>(dur));
   coro::get_io_context_ref().link_timeout(&k);
   int ret = co_await connd_awaitable;
   detail::_tcp_connection_helper::handle_connect_error(-ret);
-  co_return std::make_unique<CONN_TYPE>(fd);
+  co_return CONN_TYPE(fd);
 }
 }  // namespace coring::tcp
 

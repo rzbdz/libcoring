@@ -38,49 +38,49 @@ task<> send_header(tcp::connection *conn, HttpResponse *res) {
   res->appendToBuffer(&header_buf);
   co_await write_all(conn, &header_buf);
 }
+
 inline task<> send_bad_request(tcp::connection *conn, HttpResponse *res) {
   res->setStatusCode(HttpResponse::k400BadRequest);
   return send_header(conn, res);
 }
 
 task<> send_file(tcp::connection *conn, buffer_pool *pool, HttpResponse *res, const string &path) {
-  std::unique_ptr<file_t> file;
-  off_t total_size = 0;
   if (path == "public/bench") {
     res->setStatusCode(HttpResponse::k404NotFound);
     co_await send_header(conn, res);
     co_return;
   }
   try {
-    file = co_await openat(path.data(), O_RDONLY, 0);
-    struct ::statx *detail = co_await file->get_statx();
+    off_t total_size = 0;
+    auto file = co_await openat(path.data(), O_RDONLY, 0);
+    struct ::statx *detail = co_await file.get_statx();
     if (S_ISDIR(detail->stx_mode)) {
       res->setStatusCode(HttpResponse::k404NotFound);
     } else {
       total_size = static_cast<off_t>(detail->stx_size);
       res->setStatusCode(HttpResponse::k200Ok);
     }
+    if (total_size > 0) {
+      res->setContentTypeByPath(path);
+      res->setContentLength(total_size);
+    }
+    co_await send_header(conn, res);
+    if (total_size == 0) {
+      co_return;
+    }
+    long sent_bytes = 0;
+    while (sent_bytes < total_size) {
+      auto bf = co_await pool->read(file, GID, sent_bytes);
+      sent_bytes += static_cast<decltype(sent_bytes)>(bf->readable());
+      co_await write_all(conn, bf.get());
+    }
+    LOG_TRACE("one file is responses: {} bytes", total_size);
   } catch (coring::bad_file &e) {
     res->setStatusCode(HttpResponse::k404NotFound);
   }
-  if (total_size > 0) {
-    res->setContentTypeByPath(path);
-    res->setContentLength(total_size);
-  }
-  co_await send_header(conn, res);
-  if (total_size == 0) {
-    co_return;
-  }
-  long sent_bytes = 0;
-  while (sent_bytes < total_size) {
-    auto bf = co_await pool->read(file->fd(), GID, sent_bytes);
-    sent_bytes += static_cast<decltype(sent_bytes)>(bf->readable());
-    co_await write_all(conn, bf.get());
-  }
-  LOG_TRACE("one file is responses: {} bytes", total_size);
 }
 
-task<> do_http(std::unique_ptr<tcp::connection> conn, buffer_pool *pool) {
+task<> do_http(tcp::connection conn, buffer_pool *pool) {
   // LOG_TRACE("new client");
   http::HttpContext ctx;
   auto read_buffer = buffer(BUFFER_BLOCK_SIZE);
@@ -89,15 +89,15 @@ task<> do_http(std::unique_ptr<tcp::connection> conn, buffer_pool *pool) {
     for (; !close;) {
       using namespace std::chrono_literals;
       HttpResponse res;
-      co_await read_some(conn.get(), &read_buffer);
+      co_await read_some(&conn, &read_buffer);
       if (!ctx.parseRequest(&read_buffer)) {
         close = true;
         res.setCloseConnection(close);
-        co_await send_bad_request(conn.get(), &res);
+        co_await send_bad_request(&conn, &res);
       } else if (ctx.gotAll()) {
         close = ctx.request().keepalive();
         res.setCloseConnection(close);
-        co_await send_file(conn.get(), pool, &res, ctx.request().path());
+        co_await send_file(&conn, pool, &res, ctx.request().path());
       }
       ctx.reset();
     }

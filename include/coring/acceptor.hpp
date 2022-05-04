@@ -93,8 +93,8 @@ class acceptor : noncopyable {
   }
 
   template <typename CONNECTION_TYPE = tcp::connection>
-  requires(std::is_same_v<tcp::connection, CONNECTION_TYPE> || std::is_same_v<tcp::peer_connection, CONNECTION_TYPE>)
-      async_task<std::unique_ptr<CONNECTION_TYPE>> accept() {
+  requires(std::is_same_v<tcp::connection, CONNECTION_TYPE> ||
+           std::is_same_v<tcp::peer_connection, CONNECTION_TYPE>) async_task<CONNECTION_TYPE> accept() {
     auto &ctx = coro::get_io_context_ref();
     net::endpoint peer_addr{};
     auto addr_len = net::endpoint::len;
@@ -110,7 +110,7 @@ class acceptor : noncopyable {
     if (connfd < 0 && connfd != -EINTR) {
       throw std::system_error(std::error_code{-connfd, std::system_category()});
     }
-    co_return std::make_unique<CONNECTION_TYPE>(socket{connfd}, peer_addr);
+    co_return CONNECTION_TYPE(socket{connfd}, peer_addr);
   }
 
   void stop() {}

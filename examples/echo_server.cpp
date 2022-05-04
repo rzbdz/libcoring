@@ -10,10 +10,10 @@
 #include <chrono>
 
 #include "coring/async_logger.hpp"
+#include "coring/detail/debug.hpp"
 
 #include "coring/async_task.hpp"
 #include "coring/task.hpp"
-#include "coring/detail/debug.hpp"
 #include "coring/acceptor.hpp"
 #include "coring/timeout.hpp"
 #include "coring/socket_writer.hpp"
@@ -41,16 +41,17 @@ struct EchoServer {
     LOG_INFO("echo server constructed, will be run on port: {}", port);
   }
 
-  task<> echo_loop(std::unique_ptr<tcp::connection> conn) {
+  task<> echo_loop(tcp::connection conn) {
     try {
       while (true) {
-        auto read_buffer = co_await pool.read(conn->fd(), GID);
+        auto read_buffer = co_await pool.read(conn.fd(), GID);
         LOG_INFO("read,bid: {} sz: {}", read_buffer->buffer_id(), read_buffer->readable());
-        co_await write_all(conn.get(), read_buffer.get());
+        co_await write_all(&conn, read_buffer.get());
         LOG_INFO("written");
       }
     }
     catch_it;  // prevent async punt, just don't use co_await conn.shutdown()
+    LOG_DEBUG_RAW("end of echo_loop, should close");
   }
 
   task<> event_loop() {
@@ -93,6 +94,7 @@ int main(int argc, char *argv[]) {
     set_log_level(INFO);  // no logging output by default
     server.run();
   } else {
+    set_log_level(LOG_LEVEL_CNT);
     server.run();
   }
   return 0;

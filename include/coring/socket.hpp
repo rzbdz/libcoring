@@ -111,12 +111,12 @@ inline void safe_bind_socket(int fd, const sockaddr *addr) {
     throw std::system_error(std::error_code{errno, std::system_category()});
   }
 }
-inline auto make_unique_udp_socket() {
+inline auto make_udp_socket() {
   int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
   if (fd < 0) {
     throw std::runtime_error("no resource available for socket allocation");
   }
-  return std::make_unique<socket>(fd);
+  return socket(fd);  // it would be moved
 }
 inline auto make_shared_udp_socket() {
   int fd = ::socket(AF_INET, SOCK_DGRAM, 0);

@@ -28,6 +28,7 @@
 
 #include "timer.hpp"
 #include "signals.hpp"
+#include "sync_wait.hpp"
 
 namespace coring {
 class io_context;

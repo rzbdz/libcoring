@@ -67,9 +67,8 @@ typedef file_base<full_status> file_t;
 template <typename StatusType>
 class file_base : public file_descriptor {
  public:
-  explicit file_base(int ffd) : file_descriptor{ffd} {}
-  file_base(const file_base &rhs) : file_descriptor{rhs.fd_}, status_{rhs.status_} {}
-  file_base(file_base &&rhs) noexcept : file_descriptor{rhs.fd_}, status_{std::move(rhs.status_)} {}
+  explicit file_base(int ffd = -1) : file_descriptor{ffd} {}  // for placeholder
+  file_base(file_base &&rhs) noexcept : file_descriptor{std::move(rhs)}, status_{std::move(rhs.status_)} {}
   int fd() const { return fd_; }
   /// Fill the statx lazily...
   /// @see: statx(2)
@@ -145,8 +144,7 @@ class file_base : public file_descriptor {
 ///              e.g. S_IRWXU = 00700, user read write execute, S_IWGRP group write
 /// \return
 template <class FileStorageType = file_t, bool UseExecption = true>
-inline async_task<std::unique_ptr<FileStorageType>> openat(const char *path, int flags, mode_t mode = 0,
-                                                           int dirfd = AT_FDCWD) {
+inline async_task<FileStorageType> openat(const char *path, int flags, mode_t mode = 0, int dirfd = AT_FDCWD) {
   auto ffd = co_await coro::get_io_context_ref().openat(dirfd, path, flags, mode);
   if constexpr (UseExecption) {
     if (ffd < 0) {
@@ -155,7 +153,7 @@ inline async_task<std::unique_ptr<FileStorageType>> openat(const char *path, int
   }
   // http://eel.is/c++draft/class.copy.elision#3
   // TODO: useless move, we will see
-  co_return std::move(std::make_unique<FileStorageType>(ffd));
+  co_return FileStorageType(ffd);
 }
 }  // namespace coring
 
