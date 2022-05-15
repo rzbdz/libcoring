@@ -3,8 +3,8 @@
 #include <gtest/gtest.h>
 #include <coring/detail/skiplist_map.hpp>
 
-TEST(SkipListTest, TestSimple) {
-  coring::skiplist_map<int, int, INT_MIN, INT_MAX> sk;
+TEST(PmrSkipListTest, TestSimple) {
+  coring::experiment::skiplist_map<int, int, INT_MIN, INT_MAX> sk;
   for (int i = 0; i < 20; ++i) {
     sk.add(i, i);
   }
@@ -17,12 +17,12 @@ TEST(SkipListTest, TestSimple) {
   sk.erase_one(6);
   // test not exist!!
   sk.erase_one(99);
-  //  sk.printKey();
+  sk.printKey();
   EXPECT_EQ(sk.size(), 20 - 3);
   EXPECT_EQ(sk.check_correctness(), true);
 }
 
-TEST(SkipListTest, TestAdd) {
+TEST(PmrSkipListTest, TestAdd) {
   coring::skiplist_map<int, int, INT_MIN, INT_MAX> sk;
   for (int i = 0; i < 10; ++i) {
     if (i == 1 || i == 5 || i == 7) {
@@ -43,7 +43,7 @@ TEST(SkipListTest, TestAdd) {
   EXPECT_TRUE(sk.check_correctness());
 }
 
-TEST(SkipListTest, TestPopLessEqSimple1) {
+TEST(PmrSkipListTest, TestPopLessEqSimple1) {
   coring::skiplist_map<int, int, INT_MIN, INT_MAX> sk;
   for (int i = 0; i < 10; ++i) {
     if (i == 1 || i == 5 || i == 7) {
@@ -95,7 +95,7 @@ struct handle {
   constexpr static handle empty() { return {nullptr}; }
 };
 
-TEST(SkipListTest, TestValueRetrieve) {
+TEST(PmrSkipListTest, TestValueRetrieve) {
   coring::skiplist_map<mytime, handle, mytime::mintime(), mytime::maxtime()> list;
   auto now = std::chrono::system_clock::now();
   auto ms = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
