@@ -23,11 +23,35 @@
 #include "coring/async_scope.hpp"
 #include "coring/single_consumer_async_auto_reset_event.hpp"
 
-#include "coring/thread.hpp"
+#include "coring/detail/thread.hpp"
 #include "coring/execute.hpp"
 
 #include "timer.hpp"
 #include "signals.hpp"
+#include "sync_wait.hpp"
+
+namespace coring {
+class io_context;
+struct coro {
+  inline static auto get_io_context() {
+    auto ptr = reinterpret_cast<coring::io_context *>(io_context_thread_local);
+    // NO exception thrown, just make it support nullptr
+    return ptr;
+  }
+  static io_context &get_io_context_ref() {
+    auto ptr = reinterpret_cast<coring::io_context *>(io_context_thread_local);
+    if (ptr == nullptr) {
+      throw std::runtime_error{"no io_context bind"};
+    }
+    return *ptr;
+  }
+  inline static thread_local io_context *io_context_thread_local;
+  void static provide(io_context *ctx) { io_context_thread_local = ctx; }
+  /// Just make sure you are in a coroutine before calling this,
+  /// it's not the same spawn as the one in boost::asio.
+  inline static void spawn(task<> &&t) {}
+};
+}  // namespace coring
 
 namespace coring {
 ///
@@ -193,7 +217,7 @@ class io_context : public coring::detail::io_uring_context {
  public:
   inline executor_t as_executor() { return this; }
 
-  bool inline on_this_thread() { return reinterpret_cast<decltype(this)>(coring::thread::get_key_data(0)) == this; }
+  bool inline on_this_thread() { return reinterpret_cast<decltype(this)>(coro::get_io_context()) == this; }
 
   /// Immediate issue a one-way-task to run the awaitable.
   /// Make sure you are in the current thread (or, inside of a coroutine running on the io_context).
@@ -246,7 +270,10 @@ class io_context : public coring::detail::io_uring_context {
   /// just forbids it. If we need threading, do our own or checkout another branch to try it out.
   ///
   /// \param awaitable a task, must be void return such as task<>
-  void inline spawn(my_todo_t &&awaitable) { execute(std::move(awaitable)); }
+  template <typename AWAITABLE>
+  void inline spawn(AWAITABLE &&awaitable) {
+    execute(std::forward<AWAITABLE>(awaitable));
+  }
 
   ~io_context() noexcept override {
     // have to free resources
@@ -290,20 +317,21 @@ class io_context : public coring::detail::io_uring_context {
 
  public:
   void run() {
-    coring::thread::set_key_data(this, 0);
+    coro::provide(this);
     do_run();
-    coring::thread::set_key_data(nullptr, 0);
+    coro::provide(nullptr);
   }
 
   void run(std::latch &cd) {
-    coring::thread::set_key_data(this, 0);
+    coro::provide(this);
     cd.count_down();
     do_run();
-    coring::thread::set_key_data(nullptr, 0);
+    coro::provide(nullptr);
   }
 
   void stop() {
-    if (reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0)) == this) {
+    // LOG_TRACE("server done!");
+    if (reinterpret_cast<coring::io_context *>(coro::get_io_context()) == this) {
       stopped_ = true;
     } else {
       // lazy stop
@@ -332,26 +360,7 @@ class io_context : public coring::detail::io_uring_context {
   coring::single_consumer_async_auto_reset_event timer_event_;
   __sighandler_t signal_func_{nullptr};
 };
-}  // namespace coring
-
-namespace coring {
-struct coro {
-  inline static auto get_io_context() {
-    auto ptr = reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0));
-    // NO exception thrown, just make it support nullptr
-    return ptr;
-  }
-  static io_context &get_io_context_ref() {
-    auto ptr = reinterpret_cast<coring::io_context *>(coring::thread::get_key_data(0));
-    if (ptr == nullptr) {
-      throw std::runtime_error{"no io_context bind"};
-    }
-    return *ptr;
-  }
-  /// Just make sure you are in a coroutine before calling this,
-  /// it's not the same spawn as the one in boost::asio.
-  inline static void spawn(task<> &&t) { get_io_context_ref().spawn(std::move(t)); }
-};
+inline void co_spawn(task<> &&t) { coro::get_io_context_ref().spawn(std::move(t)); }
 }  // namespace coring
 
 #endif  // CORING_IO_CONTEXT_HPP

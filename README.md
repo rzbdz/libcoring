@@ -116,8 +116,10 @@ Without SQPoll, compared to raw C liburing interface  (100%):
 
 ### Focusing on now
 
-- Cancellation for io_uring.
-
+- [*now] Benchmarking for all module with alternatives designs.
+- Threading, no good threading model design now.
+- more simple buffer interface, and improve the performance on sth like `insert_iterator` with fmt.
+- **[suspended]** Cancellation for io_uring.
 ---
 
 ### Notices and Concerns:

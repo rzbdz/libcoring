@@ -3,13 +3,13 @@
 #include <gtest/gtest.h>
 #include <coring/detail/skiplist_map.hpp>
 
-TEST(SkipListTest, TestSimple) {
-  coring::skiplist_map<int, int, INT_MIN, INT_MAX> sk;
+TEST(PmrSkipListTest, TestSimple) {
+  coring::pmr::skiplist_map<int, int> sk;
   for (int i = 0; i < 20; ++i) {
-    sk.add(i, i);
+    sk.emplace(i, i);
   }
-  // sk.printKey();
-  EXPECT_EQ(sk.check_correctness(), true);
+  sk.print();
+  EXPECT_EQ(sk.correct(), true);
   EXPECT_EQ(sk.size(), 20);
   std::cout << std::endl;
   sk.erase_one(4);
@@ -17,51 +17,53 @@ TEST(SkipListTest, TestSimple) {
   sk.erase_one(6);
   // test not exist!!
   sk.erase_one(99);
-  //  sk.printKey();
+  sk.print();
   EXPECT_EQ(sk.size(), 20 - 3);
-  EXPECT_EQ(sk.check_correctness(), true);
+  EXPECT_EQ(sk.correct(), true);
 }
 
-TEST(SkipListTest, TestAdd) {
-  coring::skiplist_map<int, int, INT_MIN, INT_MAX> sk;
+TEST(PmrSkipListTest, TestAdd) {
+  coring::pmr::skiplist_map<int, int> sk;
+
   for (int i = 0; i < 10; ++i) {
     if (i == 1 || i == 5 || i == 7) {
       for (int j = 0; j < 3; ++j) {
-        sk.add(i, i);
+        sk.emplace(i, i);
       }
     } else {
-      sk.add(i, i);
+      sk.emplace(i, i);
     }
   }
   EXPECT_EQ(sk.size(), 16);
-  sk.add(16, 1);
-  sk.add(18, 1);
-  sk.add(12, 1);
-  sk.add(13, 1);
+  sk.emplace(16, 1);
+  sk.emplace(18, 1);
+  sk.emplace(12, 1);
+  sk.emplace(13, 1);
   EXPECT_EQ(sk.size(), 20);
   //  sk.printKey();
-  EXPECT_TRUE(sk.check_correctness());
+  EXPECT_TRUE(sk.correct());
 }
 
-TEST(SkipListTest, TestPopLessEqSimple1) {
-  coring::skiplist_map<int, int, INT_MIN, INT_MAX> sk;
+TEST(PmrSkipListTest, TestPopLessEqSimple1) {
+  coring::pmr::skiplist_map<int, int> sk;
+
   for (int i = 0; i < 10; ++i) {
     if (i == 1 || i == 5 || i == 7) {
       for (int j = 0; j < 3; ++j) {
-        sk.add(i, i);
+        sk.emplace(i, i);
       }
     } else {
-      sk.add(i, i + 2);
+      sk.emplace(i, i + 2);
     }
   }
-  sk.add(16, 1);
-  sk.add(18, 1);
-  sk.add(12, 1);
-  sk.add(13, 1);
+  sk.emplace(16, 1);
+  sk.emplace(18, 1);
+  sk.emplace(12, 1);
+  sk.emplace(13, 1);
   //  LOG_DEBUG_RAW("print key 1");
   //  sk.printKey();
   EXPECT_EQ(sk.size(), 20);
-  EXPECT_TRUE(sk.check_correctness());
+  EXPECT_TRUE(sk.correct());
   auto res = sk.pop_less_eq(9);
   // sk.printKey();
   EXPECT_EQ(sk.size(), 4);
@@ -80,7 +82,7 @@ TEST(SkipListTest, TestPopLessEqSimple1) {
   }
   //  LOG_DEBUG_RAW("print key 2");
   //  sk.printKey();
-  EXPECT_TRUE(sk.check_correctness());
+  EXPECT_TRUE(sk.correct());
 }
 
 struct mytime {
@@ -88,15 +90,15 @@ struct mytime {
   data_t val;
   constexpr static mytime maxtime() { return {std::numeric_limits<data_t>::max()}; }
   constexpr static mytime mintime() { return {std::numeric_limits<data_t>::min()}; }
-  friend bool operator<=(const mytime &lhs, const mytime &rhs) { return lhs.val <= rhs.val; }
+  friend auto operator<=>(const mytime &lhs, const mytime &rhs) { return lhs.val <=> rhs.val; }
 };
 struct handle {
   void *val;
   constexpr static handle empty() { return {nullptr}; }
 };
 
-TEST(SkipListTest, TestValueRetrieve) {
-  coring::skiplist_map<mytime, handle, mytime::mintime(), mytime::maxtime()> list;
+TEST(PmrSkipListTest, TestValueRetrieve) {
+  coring::pmr::skiplist_map<mytime, handle, mytime::mintime(), mytime::maxtime()> list;
   auto now = std::chrono::system_clock::now();
   auto ms = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
   void *handles[205];
@@ -109,21 +111,21 @@ TEST(SkipListTest, TestValueRetrieve) {
   // we pretend we use up 100ms when we wake up
   // insert in reverse order to test the inserting as a bonus
   for (int i = 99; i >= 0; --i) {
-    list.insert(mytime{ms + i}, handle{handles[i]});
+    list.emplace(mytime{ms + i}, handle{handles[i]});
   }
   // then we add 105 nodes won't expire (later)
   for (int i = 104; i >= 0; --i) {
-    list.insert(mytime{ms + 1000 + i}, handle{handles[i + 100]});
+    list.emplace(mytime{ms + 1000 + i}, handle{handles[i + 100]});
   }
-  ASSERT_TRUE(list.check_correctness());
+  ASSERT_TRUE(list.correct());
   // pretend that we have been sleeping for 100ms
   auto new_now = ms + 100;
   auto expired_handles = list.pop_less_eq(mytime{new_now});
   ASSERT_EQ(expired_handles.size(), 100);
   ASSERT_EQ(list.size(), 105);
-  ASSERT_TRUE(list.check_correctness());
+  ASSERT_TRUE(list.correct());
   for (int i = 0; i < 100; ++i) {
     ASSERT_EQ(expired_handles[i].val, reinterpret_cast<void *>(0x7fff1 + i));
   }
-  ASSERT_TRUE(list.check_correctness());
+  ASSERT_TRUE(list.correct());
 }

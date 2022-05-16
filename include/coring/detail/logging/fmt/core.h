@@ -1708,7 +1708,7 @@ constexpr auto make_format_args(Args &&...args) -> format_arg_store<Context, rem
   \rst
   Returns a named argument to be used in a formatting function.
   It should only be used in a call to a formatting function or
-  `dynamic_format_arg_store::push_back`.
+  `dynamic_format_arg_store::has_written`.
 
   **Example**::
 

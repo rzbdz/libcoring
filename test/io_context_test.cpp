@@ -1,6 +1,6 @@
 #include "coring/detail/debug.hpp"
 #include "coring/io_context.hpp"
-#include "coring/thread.hpp"
+#include "coring/detail/thread.hpp"
 #include "coring/timeout.hpp"
 #include <thread>
 #include <chrono>
@@ -233,7 +233,7 @@ TEST(Timeout, DirectTimeout) {
   auto exec = ctx.as_executor();
   using namespace std::chrono_literals;
   schedule(exec, []() -> task<> {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 1; i < 1000; i++) {
       co_await sleep_for_accurate(i * 100ms);
     }
   }());

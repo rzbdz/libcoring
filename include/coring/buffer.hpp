@@ -18,15 +18,19 @@ namespace detail {
 // 4 bytes would be a waste...
 constexpr static const char kCRLF[] = "\r\n\r\n";
 
-class buffer_view {
+template <typename ValueType = char>
+class buffer_view_base {
  public:
-  char *data_;
+  using value_type = ValueType;
+  value_type *data_;
   size_t len_;
-  [[nodiscard]] inline char *data() { return data_; }              // NOLINT
-  [[nodiscard]] inline const char *data() const { return data_; }  // NOLINT
+  [[nodiscard]] inline value_type *data() { return data_; }              // NOLINT
+  [[nodiscard]] inline const value_type *data() const { return data_; }  // NOLINT
   [[nodiscard]] inline size_t capacity() const { return len_; }
   [[nodiscard]] inline size_t size() const { return len_; }
 };
+
+typedef buffer_view_base<char> buffer_view;
 
 template <typename Container>
 class buffer_base : noncopyable {
@@ -51,10 +55,13 @@ class buffer_base : noncopyable {
 
   [[nodiscard]] size_t writable() const { return container_.size() - index_write_; }
 
+  [[nodiscard]] std::string_view readable_view(size_t size) const { return std::string_view{front(), size}; }
+  [[nodiscard]] std::string_view readable_view() const { return std::string_view{front(), readable()}; }
+
  public:
   void clear() { index_read_ = index_write_ = 0; }
 
-  void pop_front(size_t len) {
+  void has_read(size_t len) {
     assert(len <= readable());
     if (len == readable()) {
       //      LDR("pop_front %lu, but is larger, clear all", len);
@@ -82,7 +89,7 @@ class buffer_base : noncopyable {
       len = readable();
     }
     std::string ret(front(), len);
-    pop_front(len);
+    has_read(len);
     return ret;
   }
 
@@ -92,7 +99,7 @@ class buffer_base : noncopyable {
     assert(readable() >= sizeof(IntType));
     IntType ret = 0;
     ::memcpy(&ret, front(), sizeof(IntType));
-    pop_front(sizeof(IntType));
+    has_read(sizeof(IntType));
     return coring::net::network_to_host(ret);
   }
 
@@ -103,7 +110,7 @@ class buffer_base : noncopyable {
 
   char *back() { return container_.data() + index_write_; }
 
-  void push_back(size_t len) {
+  void has_written(size_t len) {
     //    LDR("increase length by %lu, ori:", len);
     index_write_ += len;
     //    LDR("now:");
@@ -167,14 +174,20 @@ class buffer_base : noncopyable {
 };
 }  // namespace detail
 
+// TODO: refactor buffer class and support concept
+// template <typename T>
+// concept Buffer =  requires(T& buffer){
+//  {}->
+//};
+
 /// for char array, just the data to send
 class fixed_buffer : public detail::buffer_base<detail::buffer_view> {
-  typedef detail::buffer_base<detail::buffer_view> FatherType;
+  typedef detail::buffer_base<detail::buffer_view> upper_buffer_t;
 
  public:
-  fixed_buffer(char *s, size_t len) : FatherType{{s, len}} {}
+  fixed_buffer(char *s, size_t len) : upper_buffer_t{{s, len}} {}
   template <size_t N>
-  explicit fixed_buffer(char (&s)[N]) : FatherType{{s, N - 1}} {
+  explicit fixed_buffer(char (&s)[N]) : upper_buffer_t{{s, N - 1}} {
     // truncate the '\0' end flag.
   }
 
@@ -191,6 +204,7 @@ class fixed_buffer : public detail::buffer_base<detail::buffer_view> {
       // container_.resize(index_write_ + want);
     }
   }
+
   /// it won't call make_room internal
   void emplace_back(char ch) {
     //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
@@ -200,40 +214,48 @@ class fixed_buffer : public detail::buffer_base<detail::buffer_view> {
     // ::memcpy(dst, src, len);
     *dst = ch;
     //    LDR("after copy, first byte in dst: %d", (int)(*dst));
-    push_back(1);
+    has_written(1);
   }
+
+  void push_back(char ch) {
+    make_room(1);
+    emplace_back(ch);
+  }
+
   /// You don't need to make room.
-  void emplace_back(const void *src, size_t len) {
+  void push_back(const void *src, size_t len) {
     //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
     make_room(len);
     char *dst = const_cast<char *>(back());
     //    LDR("back: 0x%lx", (size_t)dst);
     ::memcpy(dst, src, len);
     //    LDR("after copy, first byte in dst: %d", (int)(*dst));
-    push_back(len);
+    has_written(len);
   }
 
   // put int/string to data
   template <typename IntType>
-  void emplace_back_int(IntType to_put) {
+  void push_back_int(IntType to_put) {
     //    LDR("push_back a int %lu: %lu bytes", (size_t)to_put, sizeof(to_put));
     to_put = coring::net::host_to_network(to_put);
     //    LDR("to put is now : %lu", (size_t)to_put);
     emplace_back(&to_put, sizeof(IntType));
   }
 
-  void emplace_back_string(std::string str) {
+  void push_back_string(const std::string &str) {
     size_t len = str.size();
     //    LDR("push back a string: %s, %lu", str.data(), len);
-    emplace_back(str.data(), len);
+    push_back(str.data(), len);
   }
 };
 
 class flex_buffer : public detail::buffer_base<std::vector<char>> {
-  typedef detail::buffer_base<std::vector<char>> FatherType;
+  typedef detail::buffer_base<std::vector<char>> upper_buffer_t;
 
  public:
-  explicit flex_buffer(int init_size = BUFFER_DEFAULT_SIZE) : FatherType{std::vector<char>(init_size)} {}
+  typedef char value_type;
+  explicit flex_buffer(int init_size = BUFFER_DEFAULT_SIZE) : upper_buffer_t{std::vector<char>(init_size)} {}
+
   void make_room(size_t want) {
     //    LDR("make room: %lu", want);
     if (index_read_ > 0) {
@@ -258,33 +280,38 @@ class flex_buffer : public detail::buffer_base<std::vector<char>> {
     // ::memcpy(dst, src, len);
     *dst = ch;
     //    LDR("after copy, first byte in dst: %d", (int)(*dst));
-    push_back(1);
+    has_written(1);
+  }
+
+  void push_back(char ch) {
+    make_room(1);
+    emplace_back(ch);
   }
 
   /// You don't need to make room.
-  void emplace_back(const void *src, size_t len) {
+  void push_back(const void *src, size_t len) {
     //    LDR("in push_back: ask for %lu, first byte in src %d", len, (int)(*reinterpret_cast<const char *>(src)));
     make_room(len);
     char *dst = const_cast<char *>(back());
     //    LDR("back: 0x%lx", (size_t)dst);
     ::memcpy(dst, src, len);
     //    LDR("after copy, first byte in dst: %d", (int)(*dst));
-    push_back(len);
+    has_written(len);
   }
 
   // put int/string to data
   template <typename IntType>
-  void emplace_back_int(IntType to_put) {
+  void push_back_int(IntType to_put) {
     //    LDR("push_back a int %lu: %lu bytes", (size_t)to_put, sizeof(to_put));
     to_put = coring::net::host_to_network(to_put);
     //    LDR("to put is now : %lu", (size_t)to_put);
     emplace_back(&to_put, sizeof(IntType));
   }
 
-  void emplace_back_string(std::string str) {
+  void push_back_string(const std::string &str) {
     size_t len = str.size();
     //    LDR("push back a string: %s, %lu", str.data(), len);
-    emplace_back(str.data(), len);
+    push_back(str.data(), len);
   }
 };
 

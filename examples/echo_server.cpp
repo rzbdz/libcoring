@@ -10,19 +10,18 @@
 #include <chrono>
 
 #include "coring/async_logger.hpp"
+#include "coring/detail/debug.hpp"
 
 #include "coring/async_task.hpp"
 #include "coring/task.hpp"
-#include "coring/detail/debug.hpp"
 #include "coring/acceptor.hpp"
 #include "coring/timeout.hpp"
 #include "coring/socket_writer.hpp"
 
-#define catch_it_then(then)    \
+#define catch_it               \
   catch (std::exception & e) { \
     LOG_DEBUG("{}", e.what()); \
   }                            \
-  then;                        \
   static_cast<void>(0)
 #define do_nothing static_cast<void>(0)
 
@@ -45,15 +44,14 @@ struct EchoServer {
   task<> echo_loop(tcp::connection conn) {
     try {
       while (true) {
-        auto &read_buffer = co_await pool.try_read_block(conn, GID);
-        LOG_INFO("read,bid: {} sz: {}", read_buffer.buffer_id(), read_buffer.readable());
-        selected_buffer_resource on_scope_exit{read_buffer};
-        auto writer = socket_writer(conn, read_buffer);
-        co_await writer.write_all_to_file();
+        auto read_buffer = co_await pool.read(conn.fd(), GID);
+        LOG_INFO("read,bid: {} sz: {}", read_buffer->buffer_id(), read_buffer->readable());
+        co_await write_all(&conn, read_buffer.get());
         LOG_INFO("written");
       }
     }
-    catch_it_then(co_await conn.close());  // prevent async punt, just don't use co_await conn.shutdown()
+    catch_it;  // prevent async punt, just don't use co_await conn.shutdown()
+    LOG_DEBUG_RAW("end of echo_loop, should close");
   }
 
   task<> event_loop() {
@@ -63,10 +61,10 @@ struct EchoServer {
         LOG_TRACE("co await accept");
         auto conn = co_await acceptor.accept();
         LOG_INFO("accepted one, spawn handler");
-        coro::spawn(echo_loop(conn));
+        co_spawn(echo_loop(std::move(conn)));
       }
     }
-    catch_it_then(do_nothing);
+    catch_it;
   }
 
   void run() {
@@ -93,9 +91,10 @@ int main(int argc, char *argv[]) {
   if (logger_on) {
     async_logger logger{"echo_server"};
     logger.start();
-    set_log_level(TRACE);  // no logging output by default
+    set_log_level(INFO);  // no logging output by default
     server.run();
   } else {
+    set_log_level(LOG_LEVEL_CNT);
     server.run();
   }
   return 0;

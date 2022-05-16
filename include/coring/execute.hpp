@@ -2,7 +2,7 @@
 #ifndef CORING_EXECUTE_HPP
 #define CORING_EXECUTE_HPP
 
-#include "thread.hpp"
+#include "coring/detail/thread.hpp"
 #include "coring/is_awaitable.hpp"
 namespace coring {
 

@@ -9,113 +9,102 @@
 #include "coring/io_context.hpp"
 #include "coring/buffer_pool.hpp"
 #include "socket.hpp"
+#include "eof_error.hpp"
+
 namespace coring {
-/// \tparam UpperType the buffer type
-template <typename UpperType = buffer>
-class socket_writer_base {
- public:
-  template <typename... Args>
-  explicit socket_writer_base(socket fd, Args &&...args) : fd_{fd}, upper_layer_{std::forward<Args>(args)...} {
-    static_assert(std::is_constructible_v<UpperType, Args...>);
+/// Write some bytes to `sock` from `buffer`, eof is not an error,
+/// I use pointer as argument is doing it by convention, only use const references
+/// and pointers.
+/// \return how many bytes are written to the socket, 0 if eof
+template <typename Buffer, typename TcpConnection>
+inline async_task<int> write_some(TcpConnection *sock, Buffer *buffer) {
+  auto n = co_await sock->send_some(buffer->front(), buffer->readable());
+  if (n < 0 && n != -EINTR) {
+    throw std::system_error(std::error_code{-n, std::system_category()});
   }
-
- private:
-  void handle_write_error(int ret_code) {
-    if (ret_code == 0) {
-      throw std::runtime_error("socket may be closed, encounter EOF");
-    }
-    if (ret_code < 0 && ret_code != -EINTR) {
-      throw std::system_error(std::error_code{-ret_code, std::system_category()});
-    }
-  }
-
- public:
-  /// just one write.
-  /// \param
-  /// \return
-  [[nodiscard]] task<int> write_to_file() {
-    auto &ctx = coro::get_io_context_ref();
-    // use send instead of read benefits from internal poll/epoll mechanism (maybe)
-    auto n = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-    handle_write_error(n);
-    upper_layer_.pop_front(n);
-    co_return n;
-  }
-  /// write all to file, we must handle exception
-  /// \param
-  /// \return
-  task<size_t> write_all_to_file() {
-    size_t n = upper_layer_.readable();
-    auto &ctx = coro::get_io_context_ref();
-    while (n != 0) {
-      // LOG_TRACE("co await send");
-      auto writed = co_await ctx.send(fd_, upper_layer_.front(), upper_layer_.readable(), 0);
-      LOG_TRACE("co await send: {} bytes", writed);
-      handle_write_error(writed);
-      upper_layer_.pop_front(writed);
-      n -= writed;
-    }
-    // FIXME: useless return value...
-    co_return n;
-  }
-
-  task<> write_certain_incrementally(const char *place, size_t nbytes) {
-    static_assert(std::is_same_v<UpperType, buffer>);
-    upper_layer_.emplace_back(place, nbytes);
-    co_await write_to_file();
-  }
-  task<> write_certain_loosely(const char *place, size_t nbytes) {
-    static_assert(std::is_same_v<UpperType, buffer>);
-    upper_layer_.emplace_back(place, nbytes);
-    if (upper_layer_.readable() >= 64 * 1024) {
-      co_await write_to_file();
-    }
-  }
-
-  task<> write_certain_strictly(const char *place, size_t nbytes) {
-    upper_layer_.emplace_back(place, nbytes);
-    co_await write_all_to_file();
-  }
-
-  task<> write_certain(const char *place, size_t nbytes) {
-    upper_layer_.emplace_back(place, nbytes);
-    co_await write_to_file();
-  }
-  UpperType &raw_buffer() { return upper_layer_; }
-
- private:
-  socket fd_;
-  UpperType upper_layer_;
-};
-
-/// wrap a socket with a buffer...
-/// I don't know if there are other approach.
-/// \return a buffered io, recommended using auto
-template <typename... Args>
-requires std::is_constructible_v<fixed_buffer, Args...>
-inline auto socket_writer(socket so, Args &&...args) {
-  return socket_writer_base<fixed_buffer>{so, std::forward<Args>(args)...};
+  buffer->has_read(n);
+  co_return n;
 }
 
-/// wrap a socket with a buffer...
-/// I don't know if there are other approach.
-/// \return a buffered io, recommended using auto
-template <typename... Args>
-requires std::is_constructible_v<flex_buffer, Args...>
-inline auto socket_writer(socket so, Args &&...args) {
-  return socket_writer_base<flex_buffer>{so, std::forward<Args>(args)...};
+/// Write some bytes to `sock` from `buffer`, eof is not an error
+/// \return how many bytes are written to the socket, 0 if eof
+template <typename Buffer, typename TcpConnection, class Dur>
+inline async_task<int> write_some(TcpConnection *sock, Buffer *buffer, Dur &&dur) {
+  auto n = co_await sock->send_some(buffer->front(), buffer->readable(), std::forward<Dur>(dur));
+  if (n < 0 && n != -EINTR) {
+    throw std::system_error(std::error_code{-n, std::system_category()});
+  }
+  buffer->has_read(n);
+  co_return n;
 }
-/// TODO: bad abstraction
-/// \param so
-/// \param buffer
-/// \return a stateful buffered
-inline auto socket_writer(socket so, selected_buffer &buffer) {
-  auto ret = socket_writer_base<fixed_buffer>{so, buffer.data(), buffer.capacity()};
-  ret.raw_buffer().push_back(buffer.readable());
-  return ret;
+
+/// Write all bytes from buffer to sock, eof is treated as an error (`coring::eof_error` is thrown)
+template <typename Buffer, typename TcpConnection>
+inline async_task<> write_certain(TcpConnection *sock, Buffer *buffer, int nbytes) {
+  auto total = nbytes;
+  while (total != 0) {
+    auto n = co_await sock->send_some(buffer->front(), buffer->readable());
+    if (n == 0) {
+      throw coring::eof_error{};
+    }
+    if (n < 0 && n != -EINTR) {
+      throw std::system_error(std::error_code{-n, std::system_category()});
+    }
+    buffer->has_read(n);
+    total -= n;
+  }
 }
-typedef socket_writer_base<fixed_buffer> fixed_socket_writer;
-typedef socket_writer_base<flex_buffer> flex_socket_writer;
+
+/// Write all bytes from buffer to sock, eof is treated as an error (`coring::eof_error` is thrown)
+template <typename Buffer, typename TcpConnection, class Dur>
+inline async_task<> write_certain(TcpConnection *sock, Buffer *buffer, int nbytes, Dur &&dur) {
+  auto total = nbytes;
+  while (total != 0) {
+    auto n = co_await sock->send_some(buffer->front(), buffer->readable(), std::forward<Dur>(dur));
+    if (n == 0) {
+      throw coring::eof_error{};
+    }
+    if (n < 0 && n != -EINTR) {
+      throw std::system_error(std::error_code{-n, std::system_category()});
+    }
+    buffer->has_read(n);
+    total -= n;
+  }
+}
+
+/// Write all bytes from buffer to sock, eof is treated as an error (`coring::eof_error` is thrown)
+template <typename Buffer, typename TcpConnection>
+inline async_task<> write_all(TcpConnection *sock, Buffer *buffer) {
+  auto total = buffer->readable();
+  while (total != 0) {
+    auto n = co_await sock->send_some(buffer->front(), buffer->readable());
+    if (n == 0) {
+      throw coring::eof_error{};
+    }
+    if (n < 0 && n != -EINTR) {
+      throw std::system_error(std::error_code{-n, std::system_category()});
+    }
+    buffer->has_read(n);
+    total = buffer->readable();
+  }
+}
+
+/// Write all bytes from buffer to sock, eof is treated as an error (`coring::eof_error` is thrown)
+template <typename Buffer, typename TcpConnection, class Dur>
+inline async_task<> write_all(TcpConnection *sock, Buffer *buffer, Dur &&dur) {
+  auto total = buffer->readable();
+  while (total != 0) {
+    auto n = co_await sock->send_some(buffer->front(), buffer->readable(), std::forward<Dur>(dur));
+    if (n == 0) {
+      throw coring::eof_error{};
+    }
+    if (n < 0 && n != -EINTR) {
+      throw std::system_error(std::error_code{-n, std::system_category()});
+    }
+    buffer->has_read(n);
+    total = buffer->readable();
+  }
+}
 
 }  // namespace coring
 

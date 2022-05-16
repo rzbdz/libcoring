@@ -5,20 +5,13 @@
 #include <syscall.h>
 #include <cstdio>
 #include <type_traits>
-// For user data (a bad design, will be revised) such as io_context
-#define _SET_KEY_DATA_CODE_GEN(NO)                                                                       \
-  inline static thread_local void *t_key_data[NO];                                                       \
-  inline static void set_key_data(void *data_ptr, int no) { coring::thread::t_key_data[no] = data_ptr; } \
-  inline static void *get_key_data(int no) { return coring::thread::t_key_data[no]; }
 
-namespace coring {
+namespace coring::detail {
 struct thread {
   // internal
   inline static thread_local int t_cached_tid = 0;
   inline static thread_local char *t_tid_string_ptr;
   inline static thread_local int t_tid_string_length = 6;
-
-  _SET_KEY_DATA_CODE_GEN(2)
 
   inline static void cache_tid() {
     if (t_cached_tid == 0) {
@@ -50,5 +43,5 @@ struct thread {
 
 static_assert(std::is_same_v<int, pid_t>, "pid_t should be int");
 
-}  // namespace coring
+}  // namespace coring::detail
 #endif  // CORING_THREAD_HPP
