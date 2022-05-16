@@ -249,6 +249,7 @@ struct SkiplistBase {
         head_.level_next_[i] = prevs[i]->level_next_[i];
         if (prevs[i] != &head_) prevs[i]->level_next_[i] = nullptr;
       }
+      while (max_level_ > 1 && head_.level_next_[max_level_ - 1] == tail_) max_level_--;
       auto cur = start;
       int cnt = 0;
       for (; cur;) {
@@ -258,7 +259,6 @@ struct SkiplistBase {
         allocator_type::deallocate(cur, 1);
         cur = next;
       }
-      while (max_level_ > 1 && head_.level_next_[max_level_ - 1] == tail_) max_level_--;
       length_ -= cnt;
     }
 
