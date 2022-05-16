@@ -2,6 +2,8 @@ libcoring is doing benchmark and trying out some useful features and designs now
 
 ## Timer
 
+### skiplist and `std::pmr`
+
 The first experiment feature would focus on the performance of timer which is a `skiplist_map` written by me without
 many careful consideration and perforamance awareness.
 
@@ -22,4 +24,13 @@ There are more things to deal with timer though, since the callback(coroutine ha
 
 The first benchmark shows a conclusion is that there may have nothing to do between timer and locality unless you need
 to traverse it inplace. I would try to extend an interface that do the coroutine resume directly on data structure
-instead of copy them out. Wait to see if this helps the performance. 
+instead of copy them out. Wait to see if this helps the performance.
+
+Conclusion on skiplist: skiplist is good for DB usage, like range query and persistence, it's easy to implement than
+rb-tree in this both use case. But it's not good for inserting and erasing. Neither good for cancelling implementation
+nor pop up.
+
+Conclusion on std::pmr: it would be good for DB usage too, for timer, useless since you don't need to fully scan a timer
+list.
+
+I will tryout timer wheel then.

@@ -5,6 +5,7 @@
 #include <coroutine>
 #include <linux/time_types.h>
 #include <chrono>
+#include <map>
 
 #include "coring/detail/time_utils.hpp"
 #include "coring/detail/skiplist_map.hpp"
@@ -25,8 +26,10 @@ class timer : noncopyable {
   struct timer_token {
     std::coroutine_handle<> continuation;
   };
-  // TODO: please just use multimap... This would be slow...
-  typedef skiplist_map<time_point_t, timer_token, time_point_min_v, time_point_max_v> timer_queue_t;
+  // skiplist lost the game, but I still want to prevent a iterator invalidate.
+  typedef coring::pmr::skiplist_map<time_point_t, timer_token, time_point_min_v, time_point_max_v> timer_queue_t;
+  // typedef std::multimap<time_point_t, timer_token> timer_queue_t;
+
   timer_queue_t timer_queue_{};
 
  public:
@@ -34,7 +37,7 @@ class timer : noncopyable {
   ~timer() = default;
   bool has_more_timeouts() {
     //    LOG_DEBUG_RAW("timer queue sz: %ld", timer_queue_.size());
-    return timer_queue_.size() > 0;
+    return !timer_queue_.empty();
   }
   /// call after verified the has_more_timeouts()
   /// \return a timespec(nanoseconds) for io_uring.
@@ -50,17 +53,22 @@ class timer : noncopyable {
     return make_timespec(max(microseconds::zero(), (dur_diff)));
   }
   int handle_events() {
-    if (timer_queue_.size() == 0) {
+    if (timer_queue_.empty()) {
       return 0;
     }
     auto stamp_now = std::chrono::duration_cast<microseconds>(system_clock::now().time_since_epoch());
+    int sz = 0;
+    // we can't do this safely on multimap though.
+    timer_queue_.do_less_eq_then_pop(stamp_now.count(), [&sz](timer_token &t) -> void {
+      sz++;
+      t.continuation.resume();
+    });
     auto to_resume = timer_queue_.pop_less_eq(stamp_now.count());
     //    LOG_DEBUG_RAW("pop less eqed");
     //    timer_queue_.printKey();
     for (auto &t : to_resume) {
       t.continuation.resume();
     }
-    auto sz = to_resume.size();
     // BUG: 4 billion timeouts ?
     return static_cast<int>(sz);
   }
@@ -69,7 +77,7 @@ class timer : noncopyable {
     auto wakeup_point = stamp_now + timeout;
     //    LOG_DEBUG_RAW("timeout %ldus, stamp : %ld wakeuppoint: %ld", timeout.count(), stamp_now.count(),
     //                  wakeup_point.count());
-    timer_queue_.insert(wakeup_point.count(), timer_token{cont});
+    timer_queue_.emplace(wakeup_point.count(), timer_token{cont});
     //    LOG_DEBUG_RAW("add evented");
     //    timer_queue_.printKey();
   }

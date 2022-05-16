@@ -233,7 +233,7 @@ TEST(Timeout, DirectTimeout) {
   auto exec = ctx.as_executor();
   using namespace std::chrono_literals;
   schedule(exec, []() -> task<> {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 1; i < 1000; i++) {
       co_await sleep_for_accurate(i * 100ms);
     }
   }());

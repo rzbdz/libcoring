@@ -330,7 +330,7 @@ class io_context : public coring::detail::io_uring_context {
   }
 
   void stop() {
-    LOG_TRACE("server done!");
+    // LOG_TRACE("server done!");
     if (reinterpret_cast<coring::io_context *>(coro::get_io_context()) == this) {
       stopped_ = true;
     } else {

@@ -13,9 +13,6 @@ target_link_libraries(pmr)
 add_executable(io_context_test io_context_test.cpp)
 target_link_libraries(io_context_test uring gtest gtest_main ${CMAKE_THREAD_LIBS_INIT})
 # skiplist_map
-add_executable(skiplist_test skiplist_test.cpp)
-target_link_libraries(skiplist_test logging gtest gtest_main ${CMAKE_THREAD_LIBS_INIT})
-# skiplist_map
 add_executable(pmr_skiplist_test pmr_skiplist_test.cpp)
 target_link_libraries(pmr_skiplist_test logging gtest gtest_main ${CMAKE_THREAD_LIBS_INIT})
 #buffer
@@ -31,7 +28,7 @@ target_link_libraries(buffer_selection_test gtest gtest_main ${CMAKE_THREAD_LIBS
 add_executable(
         unit_tests
         io_context_test.cpp
-        skiplist_test.cpp
+        pmr_skiplist_test.cpp
         buffer_test.cpp
         buffer_selection_test.cpp
 )

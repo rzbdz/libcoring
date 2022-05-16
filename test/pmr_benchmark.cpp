@@ -25,6 +25,7 @@ struct ITests {
   virtual void sequential_ops() = 0;
   virtual void random_ops() = 0;
   virtual void access_ops() = 0;
+  virtual void pop_ops() = 0;
 };
 template <typename Container>
 struct SystemBase : ITests {
@@ -36,6 +37,14 @@ struct MapTestsBase : SystemBase<MapType> {
   using Find = SystemBase<MapType>;
   void sequential_ops() override {
     auto &subs = Find::subs;
+    for (int i = 0; i < subs.size(); i++) {
+      for (int j = 0; j < 1000; j++) {
+        subs[i]->emplace(100, -j);  // no fragments
+        subs[i]->emplace(500, -j);  // no fragments}
+        subs[i]->emplace(200, -j);  // no fragments}
+        subs[i]->emplace(300, -j);  // no fragments}
+      }
+    }
     for (int i = 0; i < subs.size(); i++) {
       for (int j = 0; j < 100000; j++) {
         if (j % 4 == 0) {
@@ -64,6 +73,14 @@ struct MapTestsBase : SystemBase<MapType> {
       }
     }
     for (int i = 0; i < subs.size(); i++) {
+      for (int j = 0; j < 1000; j++) {
+        subs[i]->emplace(100, -j);  // no fragments
+        subs[i]->emplace(500, -j);  // no fragments}
+        subs[i]->emplace(200, -j);  // no fragments}
+        subs[i]->emplace(300, -j);  // no fragments}
+      }
+    }
+    for (int i = 0; i < subs.size(); i++) {
       for (int tof = 0; tof < 50000; tof += 10) {
         // we want a average count
         //        for (int j = 0; j < 100; j++) {
@@ -86,29 +103,72 @@ struct MapTestsBase : SystemBase<MapType> {
   }
   void access_ops() override {
     auto &subs = Find::subs;
+    int count = 0;
     for (int j = 0; j < 5000; j++) {
       for (int i = 0; i < subs.size(); i++) {
         subs[i]->emplace(j, j - i);  // no fragments
+        count += 0;
       }
     }
+    for (int i = 0; i < subs.size(); i++) {
+      for (int j = 0; j < 1000; j++) {
+        subs[i]->emplace(100, -j);  // no fragments
+        subs[i]->emplace(500, -j);  // no fragments}
+        subs[i]->emplace(200, -j);  // no fragments}
+        subs[i]->emplace(300, -j);  // no fragments}
+        count += 4;
+      }
+    }
+    cout << "emplace " << count << " elements";
+    count = 0;
     for (int j = 0; j < 100; j++) {
       for (int i = 0; i < subs.size(); i++) {
         for (auto it = subs[i]->begin(); it != subs[i]->end(); it++) {
+          count++;
           if (it->first == INT_MAX) {
             cout << "oops";
           }
         }
       }
     }
+    cout << "accessed " << count / 100 << " elements" << endl;
+  }
+  void pop_ops() override {
+    auto &subs = Find::subs;
+    for (int j = 0; j < 5000; j++) {
+      for (int i = 0; i < subs.size(); i++) {
+        subs[i]->emplace(j, j - i);  // no fragments
+      }
+    }
+    for (int i = 0; i < subs.size(); i++) {
+      for (int j = 0; j < 1000; j++) {
+        subs[i]->emplace(100, -j);  // no fragments
+        subs[i]->emplace(500, -j);  // no fragments}
+        subs[i]->emplace(200, -j);  // no fragments}
+        subs[i]->emplace(300, -j);  // no fragments}
+      }
+    }
+    for (int j = 1000; j < 5000; j += 50) { // here is a simulation of timing ticks
+      for (int i = 0; i < subs.size(); i++) { // assume we have serveral timer single thread.
+        auto it = subs[i]->find(j);
+        for (auto b = subs[i]->begin(); b != it; b++) {
+          b->second = -1;  // simulate some thing
+        }
+        subs[i]->erase(subs[i]->begin(), it);
+        for (int k = 0; k < 100; k++) {
+          subs[i]->emplace(5000 - k, k + 1);
+        }
+      }
+    }
   }
 };
 
-struct MapSystem : MapTestsBase<std::map<int, int>> {
+struct MapSystem : MapTestsBase<std::multimap<int, int>> {
   MapSystem(int scale) {
     std::cout << "non-pmr.map" << std::endl;
     Find::subs.resize(scale);
     for (int i = 0; i < scale; i++) {
-      Find::subs[i] = std::make_unique<std::map<int, int>>();
+      Find::subs[i] = std::make_unique<std::multimap<int, int>>();
     }
   }
 };
@@ -119,6 +179,14 @@ struct SkipTestsBase : SystemBase<SkipType> {
   void sequential_ops() override {
     auto &subs = Find::subs;
     for (int i = 0; i < subs.size(); i++) {
+      for (int j = 0; j < 1000; j++) {
+        subs[i]->emplace(100, -j);  // no fragments
+        subs[i]->emplace(500, -j);  // no fragments}
+        subs[i]->emplace(200, -j);  // no fragments}
+        subs[i]->emplace(300, -j);  // no fragments}
+      }
+    }
+    for (int i = 0; i < subs.size(); i++) {
       for (int j = 0; j < 100000; j++) {
         if (j % 4 == 0) {
           subs[i]->erase_one(j - 1);
@@ -126,7 +194,7 @@ struct SkipTestsBase : SystemBase<SkipType> {
         if (j % 15 == 0) {
           [[maybe_unused]] auto p = subs[i]->pop_less_eq(j - 1);
         }
-        subs[i]->add(j, j - j);  // no fragments
+        subs[i]->emplace(j, j - j);  // no fragments
       }
     }
   }
@@ -135,7 +203,15 @@ struct SkipTestsBase : SystemBase<SkipType> {
     // re-add it in random order
     for (int j = 0; j < 50000; j++) {
       for (int i = 0; i < subs.size(); i++) {
-        subs[i]->add(j, j - i);
+        subs[i]->emplace(j, j - i);
+      }
+    }
+    for (int i = 0; i < subs.size(); i++) {
+      for (int j = 0; j < 1000; j++) {
+        subs[i]->emplace(100, -j);  // no fragments
+        subs[i]->emplace(500, -j);  // no fragments}
+        subs[i]->emplace(200, -j);  // no fragments}
+        subs[i]->emplace(300, -j);  // no fragments}
       }
     }
     for (int i = 0; i < subs.size(); i++) {
@@ -153,28 +229,68 @@ struct SkipTestsBase : SystemBase<SkipType> {
   }
   void access_ops() override {
     auto &subs = Find::subs;
+    int count = 0;
     for (int j = 0; j < 5000; j++) {
       for (int i = 0; i < subs.size(); i++) {
-        subs[i]->add(j, j - i);  // no fragments
+        subs[i]->emplace(j, j - i);  // no fragments
+        count++;
       }
     }
+    for (int i = 0; i < subs.size(); i++) {
+      for (int j = 0; j < 1000; j++) {
+        subs[i]->emplace(100, -j);  // no fragments
+        subs[i]->emplace(500, -j);  // no fragments}
+        subs[i]->emplace(200, -j);  // no fragments}
+        subs[i]->emplace(300, -j);  // no fragments}
+        count += 4;
+      }
+    }
+    cout << "emplace " << count << " elements";
+    count = 0;
+    int oops = 0;
     for (int j = 0; j < 100; j++) {
       for (int i = 0; i < subs.size(); i++) {
         for (auto it = subs[i]->begin(); it != subs[i]->end(); it++) {
-          if (it->first == INT_MAX - 5) {  // prevent oops
-            cout << "oops";
+          count++;
+          if (it->first == INT_MAX) {  // prevent oops
+            oops++;
           }
+        }
+      }
+    }
+    cout << "accessed " << count / 100 << " elements, opps: " << oops << endl;
+  }
+  void pop_ops() override {
+    auto &subs = Find::subs;
+    for (int j = 0; j < 5000; j++) {
+      for (int i = 0; i < subs.size(); i++) {
+        subs[i]->emplace(j, j - i);  // no fragments
+      }
+    }
+    for (int i = 0; i < subs.size(); i++) {
+      for (int j = 0; j < 1000; j++) {
+        subs[i]->emplace(100, -j);  // no fragments
+        subs[i]->emplace(500, -j);  // no fragments}
+        subs[i]->emplace(200, -j);  // no fragments}
+        subs[i]->emplace(300, -j);  // no fragments}
+      }
+    }
+    for (int j = 1000; j < 5000; j += 50) {
+      for (int i = 0; i < subs.size(); i++) {
+        subs[i]->do_less_eq_then_pop(j, [](int &a) -> void { a = -1; });
+        for (int k = 0; k < 100; k++) {
+          subs[i]->emplace(50000 - k, k + 1);
         }
       }
     }
   }
 };
-struct SkipSystem : SkipTestsBase<coring::skiplist_map<int, int, INT_MIN, INT_MAX>> {
+struct SkipSystem : SkipTestsBase<coring::experimental::skiplist_map<int, int>> {
   SkipSystem(int scale = SYSTEM_SIZE) {
     std::cout << "non-pmr.skip" << std::endl;
     Find::subs.resize(scale);
     for (int i = 0; i < scale; i++) {
-      subs[i] = std::make_unique<coring::skiplist_map<int, int, INT_MIN, INT_MAX>>();
+      subs[i] = std::make_unique<coring::experimental::skiplist_map<int, int>>();
     }
   }
 };
@@ -184,8 +300,8 @@ struct PmrModule {
   std::vector<std::unique_ptr<std::pmr::unsynchronized_pool_resource>> ress;
 };
 
-struct PmrMapSystem : PmrModule, MapTestsBase<std::pmr::map<int, int>> {
-  PmrMapSystem(int scale, int buffer_size = 6'400'000) {
+struct PmrMapSystem : PmrModule, MapTestsBase<std::pmr::multimap<int, int>> {
+  PmrMapSystem(int scale, int buffer_size = 6'400'00) {
     std::cout << "pmr.map" << std::endl;
     Find::subs.resize(scale);
     PmrModule::ress.resize(scale);
@@ -193,13 +309,15 @@ struct PmrMapSystem : PmrModule, MapTestsBase<std::pmr::map<int, int>> {
     for (int i = 0; i < scale; i++) {
       spaces[i] = std::make_unique<std::pmr::monotonic_buffer_resource>(buffer_size);
       ress[i] = std::make_unique<std::pmr::unsynchronized_pool_resource>(spaces[i].get());
-      subs[i] = std::make_unique<std::pmr::map<int, int>>(ress[i].get());
+      subs[i] = std::make_unique<std::pmr::multimap<int, int>>(ress[i].get());
     }
   }
 };
 
-struct PmrSkipSystem : PmrModule, SkipTestsBase<coring::experiment::skiplist_map<int, int, INT_MIN, INT_MAX>> {
-  PmrSkipSystem(int scale, int buffer_size = 6'400'000) {
+struct PmrSkipSystem
+    : PmrModule,
+      SkipTestsBase<coring::experimental::skiplist_map<int, int, std::pmr::polymorphic_allocator<std::byte>>> {
+  PmrSkipSystem(int scale, int buffer_size = 6'400'00) {
     std::cout << "pmr.skip" << std::endl;
     Find::subs.resize(scale);
     PmrModule::ress.resize(scale);
@@ -207,7 +325,9 @@ struct PmrSkipSystem : PmrModule, SkipTestsBase<coring::experiment::skiplist_map
     for (int i = 0; i < scale; i++) {
       spaces[i] = std::make_unique<std::pmr::monotonic_buffer_resource>(buffer_size);
       ress[i] = std::make_unique<std::pmr::unsynchronized_pool_resource>(spaces[i].get());
-      subs[i] = std::make_unique<coring::experiment::skiplist_map<int, int, INT_MIN, INT_MAX>>(ress[i].get());
+      subs[i] =
+          std::make_unique<coring::experimental::skiplist_map<int, int, std::pmr::polymorphic_allocator<std::byte>>>(
+              ress[i].get());
     }
   }
 };
@@ -218,7 +338,6 @@ constexpr int DS = 1;
 constexpr int PMR = 2;
 constexpr int OP = 3;
 int main(int argc, char **argv) {
-  std::cout << coring::experiment::skiplist_map<int, int, INT_MIN, INT_MAX>::node_size << std::endl;
   if (argc < 4) {
     std::cout << "`./pmr map non-pmr sequential` to run map + non-pmr + sequential_ops" << std::endl
               << "`./pmr skip pmr random` to run skiplist_map + pmr + random_ops" << std::endl;
@@ -248,6 +367,9 @@ int main(int argc, char **argv) {
   } else if (match("access", get(argv, OP))) {
     std::cout << ".access" << std::endl;
     global_itest->access_ops();
+  } else if (match("pop", get(argv, OP))) {
+    std::cout << ".pop" << std::endl;
+    global_itest->pop_ops();
   }
   return 0;
 }
